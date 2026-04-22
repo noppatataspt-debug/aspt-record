@@ -209,6 +209,9 @@ select.form-select:focus, select.add-df-sel:focus {
 .page-tab{padding:8px 16px;background:transparent;color:var(--t2);border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
 .page-tab.active{background:var(--blue);color:#fff;font-weight:700}
 .page-tab:hover:not(.active){color:var(--text)}
+/* Link ไปหน้าอื่น (Dashboard) — ต่างจาก tab ปกติ */
+a.page-tab.nav-link{margin-left:auto;text-decoration:none;color:var(--accent);border:1px dashed var(--bdr);display:inline-flex;align-items:center}
+a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:var(--accent)}
 
 #historyArea .date-bar{background:var(--s2);padding:10px 12px;border-radius:8px;margin-bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 #historyArea .date-bar input[type="date"]{padding:6px 10px;background:var(--s1);color:var(--text);border:1px solid var(--bdr);border-radius:6px;font-size:13px;font-family:inherit;flex:1;min-width:130px}
@@ -578,6 +581,7 @@ select.form-select:focus, select.add-df-sel:focus {
   <div class="page-tabs" id="pageTabs">
     <button class="page-tab active" data-page="record" onclick="switchPage('record')">✏️ บันทึก</button>
     <button class="page-tab" data-page="history" onclick="switchPage('history')">📋 ดูบันทึก</button>
+    <a class="page-tab nav-link" href="/dashboard" title="ไปหน้า Dashboard">📊 Dashboard →</a>
   </div>
   <div class="dept-bar" id="deptBar"></div>
 </div>

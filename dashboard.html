@@ -259,6 +259,9 @@ body{font-family:"IBM Plex Sans Thai",sans-serif;background:var(--bg);color:var(
 .nav{background:#0b0e18;border-bottom:1px solid var(--bdr);display:flex;padding:0 24px}
 .nb{padding:10px 22px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--t2);cursor:pointer;font-family:"IBM Plex Sans Thai",sans-serif;font-size:15px;font-weight:500;transition:all .2s}
 .nb:hover{color:var(--text)}.nb.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* Link กลับไปหน้าบันทึก — ต่างจาก tab ปกติ */
+a.nb.nav-link-back{margin-left:auto;text-decoration:none;color:var(--blue);display:inline-flex;align-items:center;border:1px dashed var(--bdr);border-radius:6px;margin-top:3px;margin-bottom:3px;padding:6px 14px;font-size:13px}
+a.nb.nav-link-back:hover{background:rgba(37,99,235,.08);border-style:solid;border-color:var(--blue);color:var(--blue)}
 .mcbar{background:#0b0e18;border-bottom:1px solid var(--bdr);padding:8px 24px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .mclbl{font-size:13px;color:var(--t3);margin-right:4px}
 .mcb{padding:5px 14px;border:1px solid var(--bdr);border-radius:20px;background:transparent;color:var(--t2);cursor:pointer;font-size:14px;font-family:"IBM Plex Sans Thai",sans-serif;transition:all .15s}
@@ -607,6 +610,7 @@ canvas{width:100%!important}
   <button class="nb" onclick="showPage('product',this)">📦 รายสินค้า</button>
   <button class="nb" onclick="showPage('machine',this)">⚙️ รายเครื่องจักร</button>
   <button class="nb" onclick="showPage('heatmap',this)">🌡️ Heatmap</button>
+  <a class="nb nav-link-back" href="/" title="ไปหน้าบันทึก">← ✏️ บันทึก</a>
 </div>
 
 <!-- OVERVIEW -->
