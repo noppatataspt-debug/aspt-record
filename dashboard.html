@@ -2085,6 +2085,13 @@ function buildInsight(){
     momBody = { lastPct: icLast.pct, prevPct: icPrev.pct, changePct, lastYm: icLast.ym, prevYm: icPrev.ym };
   }
   
+  // เครื่อง Laminate: ใช้ %Defect จาก MC_DATA (สูตรเดียวกับส่วนเทียบเดือน) เพื่อไม่ให้ตัวเลขขัดกัน
+  // เครื่องอื่นคงสูตรเดิม (คำนวณจาก PRODUCT_DF_DATA / PRODUCT_OUTPUT_DATA)
+  let recentPctDisplay = recentPct;
+  if (selMC === 'Laminate' && icLast && typeof icLast.pct === 'number') {
+    recentPctDisplay = icLast.pct;
+  }
+  
   // ----- หา MoM: ประเภทที่แย่ลง/ดีขึ้น (โดย type ratio %) -----
   let topWorsenType = null;
   let topWorsenedList = [];
@@ -2162,15 +2169,15 @@ function buildInsight(){
   // สร้าง HTML
   // ============================================================
   const fmt = n => Math.round(n).toLocaleString();
-  const cardCls = recentPct !== null && recentPct > target ? 'warn' : '';
+  const cardCls = recentPctDisplay !== null && recentPctDisplay > target ? 'warn' : '';
   
   // Section 1: สถานะโดยรวม
   let statusHtml = '';
-  if (recentPct !== null) {
-    const sectionCls = recentPct > target ? 'crit' : recentPct > target*0.85 ? 'warn' : 'good';
-    const statusTxt = recentPct > target 
-      ? `<span class="c-bad">🚨 เกิน Target ${(recentPct-target).toFixed(2)}%</span>` 
-      : recentPct > target * 0.85 
+  if (recentPctDisplay !== null) {
+    const sectionCls = recentPctDisplay > target ? 'crit' : recentPctDisplay > target*0.85 ? 'warn' : 'good';
+    const statusTxt = recentPctDisplay > target 
+      ? `<span class="c-bad">🚨 เกิน Target ${(recentPctDisplay-target).toFixed(2)}%</span>` 
+      : recentPctDisplay > target * 0.85 
       ? `<span class="c-warn">⚡ ใกล้เกิน Target</span>` 
       : `<span class="c-good">✓ ผ่าน Target</span>`;
     
@@ -2189,7 +2196,7 @@ function buildInsight(){
     statusHtml = `<div class="ic-section ${sectionCls}">
       <div class="ic-lbl">📊 สถานะโดยรวม</div>
       <div class="ic-body">
-        %Defect ปัจจุบัน <strong>${recentPct.toFixed(2)}%</strong> · Target <strong class="c-mute">${target}%</strong> ${statusTxt}
+        %Defect ปัจจุบัน <strong>${recentPctDisplay.toFixed(2)}%</strong> · Target <strong class="c-mute">${target}%</strong> ${statusTxt}
         ${momTxt}
       </div>
     </div>`;
@@ -2255,7 +2262,7 @@ function buildInsight(){
   if (topWorsenedList.length > 0 && topWorsenedList[0].changePct > 10) {
     recs.push(`ติดตาม <strong>${topWorsenedList[0].type}</strong> อย่างใกล้ชิด เพราะมีแนวโน้มเพิ่มขึ้น ${topWorsenedList[0].changePct.toFixed(1)}%`);
   }
-  if (recentPct !== null && recentPct > target * 1.2) {
+  if (recentPctDisplay !== null && recentPctDisplay > target * 1.2) {
     recs.push(`<strong class="c-bad">เรียกประชุมทีม</strong> เพราะ %Defect เกิน Target เกิน 20% — ต้องหา root cause ด่วน`);
   }
   if (recs.length === 0) {
