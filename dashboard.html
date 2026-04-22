@@ -722,9 +722,9 @@ canvas{width:100%!important}
     </div>
   </div>
   <div class="panel">
-    <div class="pt">🎯 Product Pareto — 10 อันดับสินค้าที่ %Defect สูงสุด <span class="sub">คลิกสินค้าเพื่อดูประเภท DF · คลิก Pareto ประเภทด้านบนเพื่อดูสินค้า · %Defect = DF ÷ Output</span></div>
+    <div class="pt">🎯 Product Pareto — 10 อันดับสินค้าที่ %Defect สูงสุด <span class="sub" id="pp-subtitle">คลิกสินค้าเพื่อดูประเภท DF · คลิก Pareto ประเภทด้านบนเพื่อดูสินค้า · %Defect = DF ÷ Output</span></div>
     <div class="pp-filter" id="pp-range-filter"></div>
-    <div class="pp-hdr"><span>#</span><span>Product</span><span style="text-align:right">Output</span><span style="text-align:right">DF</span><span style="text-align:right">%Defect</span></div>
+    <div class="pp-hdr"><span>#</span><span>Product</span><span style="text-align:right" id="pp-hdr-denom">Output</span><span style="text-align:right">DF</span><span style="text-align:right">%Defect</span></div>
     <div id="pp-body"></div>
     <div class="pp-legend" id="pp-legend"></div>
   </div>
@@ -1513,7 +1513,8 @@ function buildDeptView(){
     </div>`;
   }).join('');
   
-  // ใช้ ratio_pct ตรงๆ (ค่านี้ = DF/Output ของเครื่องนั้น × 100)
+  // v9.6: ใช้ ratio_pct ตรงๆ จาก view v_mc_type_monthly
+  // (ค่านี้ = DF/Output ×100 สำหรับเครื่องทั่วไป, DF/FG ×100 สำหรับ Laminate)
   const typeTotals = {};
   deptMCs.forEach(mc => {
     const mData = MC_DATA[mc] || [];
@@ -2300,24 +2301,44 @@ function buildProductPareto(){
     }
   });
   
-  // Filter + Group Output by product
+  // Filter + Group Output by product (+ FG for Laminate)
+  // v9.6: Laminate ใช้ FG เป็นตัวหาร → เก็บ fg_qty ด้วย
   const outputByProduct = {};
+  const fgByProduct = {};
   PRODUCT_OUTPUT_DATA.forEach(r => {
     if (r.machine_name === selMC && r.record_date >= cutoffStr && r.record_date < endCutoffStr) {
       outputByProduct[r.product_name] = (outputByProduct[r.product_name] || 0) + Number(r.output_qty);
+      if (r.fg_qty !== undefined) {
+        fgByProduct[r.product_name] = (fgByProduct[r.product_name] || 0) + Number(r.fg_qty);
+      }
     }
   });
   
   // Build list of products with %Defect
+  // v9.6: Laminate ใช้ DF/FG, เครื่องอื่นใช้ DF/Output
+  const isLaminate = (selMC === 'Laminate');
+  
+  // อัพเดท header/subtitle ให้บอกสูตรที่ใช้ตามเครื่อง
+  const subtitleEl = document.getElementById('pp-subtitle');
+  const hdrDenomEl = document.getElementById('pp-hdr-denom');
+  if (subtitleEl) {
+    subtitleEl.textContent = isLaminate
+      ? 'คลิกสินค้าเพื่อดูประเภท DF · คลิก Pareto ประเภทด้านบนเพื่อดูสินค้า · %Defect = DF ÷ FG (Laminate)'
+      : 'คลิกสินค้าเพื่อดูประเภท DF · คลิก Pareto ประเภทด้านบนเพื่อดูสินค้า · %Defect = DF ÷ Output';
+  }
+  if (hdrDenomEl) hdrDenomEl.textContent = isLaminate ? 'FG' : 'Output';
+  
   const allProducts = new Set([...Object.keys(dfByProduct), ...Object.keys(outputByProduct)]);
   const products = [];
   allProducts.forEach(p => {
     const df = dfByProduct[p] || 0;
     const output = outputByProduct[p] || 0;
-    const pctDefect = output > 0 ? (df / output * 100) : null;
+    const fg = fgByProduct[p] || 0;
+    const denom = isLaminate ? fg : output;
+    const pctDefect = denom > 0 ? (df / denom * 100) : null;
     // เอาเฉพาะที่มี DF > 0
     if (df > 0) {
-      products.push({ product: p, df, output, pctDefect });
+      products.push({ product: p, df, output, fg, pctDefect });
     }
   });
   
@@ -2363,11 +2384,13 @@ function buildProductPareto(){
     const safeProduct = x.product.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const pctStr = x.pctDefect === null ? '—' : x.pctDefect.toFixed(2) + '%';
     const cls = colorCls(x.pctDefect);
+    // v9.6: Laminate แสดง FG แทน Output (เพราะใช้เป็นตัวหาร)
+    const denomVal = isLaminate ? x.fg : x.output;
     return `<div class="pp-row ${rowCls}" onclick="openProductDrilldown('${safeProduct}')" title="คลิกเพื่อดูประเภท DF">
       <div class="pp-bar ${cls}" style="width:${barWidth}%"></div>
       <span class="pp-rank ${rankCls}">${i+1}</span>
       <span class="pp-name" title="${x.product}">${x.product}</span>
-      <span class="pp-output">${x.output > 0 ? Math.round(x.output).toLocaleString() : '—'}</span>
+      <span class="pp-output">${denomVal > 0 ? Math.round(denomVal).toLocaleString() : '—'}</span>
       <span class="pp-qty">${Math.round(x.df).toLocaleString()}</span>
       <span class="pp-pctdef ${cls}">${pctStr}</span>
     </div>`;
