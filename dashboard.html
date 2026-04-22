@@ -2121,8 +2121,10 @@ function buildInsight(){
     .slice(0, 3);
   
   // ----- Top 3 worst products (%Defect สูงสุด) -----
+  // v9.6: Laminate ใช้ DF/FG, เครื่องอื่นใช้ DF/Output
   const dfByProduct = {};
   const outputByProduct = {};
+  const fgByProduct = {};
   PRODUCT_DF_DATA.forEach(r => {
     if (r.machine_name === selMC && r.record_date >= cutoffStr && r.record_date < endCutoffStr) {
       dfByProduct[r.product_name] = (dfByProduct[r.product_name] || 0) + Number(r.df_qty);
@@ -2131,16 +2133,28 @@ function buildInsight(){
   PRODUCT_OUTPUT_DATA.forEach(r => {
     if (r.machine_name === selMC && r.record_date >= cutoffStr && r.record_date < endCutoffStr) {
       outputByProduct[r.product_name] = (outputByProduct[r.product_name] || 0) + Number(r.output_qty);
+      if (r.fg_qty !== undefined) {
+        fgByProduct[r.product_name] = (fgByProduct[r.product_name] || 0) + Number(r.fg_qty);
+      }
     }
   });
+  const isLamInsight = (selMC === 'Laminate');
   const badProducts = Object.keys(dfByProduct)
-    .filter(p => outputByProduct[p] > 0 && p !== '(ไม่ระบุสินค้า)')
-    .map(p => ({
-      product: p,
-      df: dfByProduct[p],
-      output: outputByProduct[p],
-      pctDefect: dfByProduct[p] / outputByProduct[p] * 100
-    }))
+    .filter(p => {
+      const denom = isLamInsight ? (fgByProduct[p] || 0) : (outputByProduct[p] || 0);
+      return denom > 0 && p !== '(ไม่ระบุสินค้า)';
+    })
+    .map(p => {
+      const denom = isLamInsight ? fgByProduct[p] : outputByProduct[p];
+      return {
+        product: p,
+        df: dfByProduct[p],
+        output: outputByProduct[p] || 0,
+        fg: fgByProduct[p] || 0,
+        denom: denom,  // เก็บ denominator ไว้ใช้ตอนแสดงผล
+        pctDefect: dfByProduct[p] / denom * 100
+      };
+    })
     .sort((a,b) => b.pctDefect - a.pctDefect)
     .slice(0, 3);
   
@@ -2219,8 +2233,10 @@ function buildInsight(){
   // Section 4: สินค้า %Defect สูง
   let badProductsHtml = '';
   if (badProducts.length > 0) {
+    // v9.6: Laminate แสดง FG แทน Output
+    const denomLabel = isLamInsight ? 'fg' : 'ผลิต';
     const items = badProducts.map(p => 
-      `• <strong>${p.product}</strong> — <strong class="c-bad">${p.pctDefect.toFixed(2)}%</strong> <span class="c-mute">(เสีย ${fmt(p.df)} / ผลิต ${fmt(p.output)})</span>`
+      `• <strong>${p.product}</strong> — <strong class="c-bad">${p.pctDefect.toFixed(2)}%</strong> <span class="c-mute">(เสีย ${fmt(p.df)} / ${denomLabel} ${fmt(p.denom)})</span>`
     ).join('<br>');
     badProductsHtml = `<div class="ic-section ${badProducts[0].pctDefect > 20 ? 'crit' : 'bad'}">
       <div class="ic-lbl">🚨 สินค้าคุณภาพต่ำที่สุด</div>
