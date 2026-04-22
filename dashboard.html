@@ -595,7 +595,7 @@ canvas{width:100%!important}
 <div class="hdr">
   <div>
     <h1>🏭 ASPT <span>Production Dashboard</span></h1>
-    <p>%Defect รายเครื่อง = DF/ของดี &nbsp;|&nbsp; %Defect ภาพรวม (รายวัน + รายเดือน) = DF/ของดีสำเร็จรูป &nbsp;|&nbsp; ข้อมูลสดจากฐานข้อมูล · รีเฟรชทุก 5 นาที</p>
+    <p>%Defect รายเครื่อง = DF/ของดี &nbsp;|&nbsp; <strong>Laminate = DF/ของดีสำเร็จรูป</strong> &nbsp;|&nbsp; %Defect ภาพรวม (รายวัน + รายเดือน) = DF/ของดีสำเร็จรูป &nbsp;|&nbsp; ข้อมูลสดจากฐานข้อมูล · รีเฟรชทุก 5 นาที</p>
   </div>
   <button class="logout-btn" id="logoutBtn" onclick="doLogout()" title="ออกจากระบบ">🚪 Logout</button>
   <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="สลับโทนสี">
@@ -1191,18 +1191,21 @@ function buildMCCharts(){
 
   // === %Defect วันล่าสุดที่บันทึกของเครื่องนี้ ===
   // รวมทุก record ของเครื่องนี้ในวันล่าสุด (อาจมีหลาย shift/หลายสินค้า)
-  let latestDay = '', latestDayPct = null, latestDayOutput = 0, latestDayDF = 0;
+  // Laminate: ใช้ DF/FG, เครื่องอื่น: ใช้ DF/Output
+  let latestDay = '', latestDayPct = null, latestDayOutput = 0, latestDayDF = 0, latestDayFG = 0;
   const dayMap = {};
   PRODUCT_OUTPUT_DATA.forEach(r => {
     if (r.machine_name !== selMC) return;
     const d = r.record_date;
-    if (!dayMap[d]) dayMap[d] = { output: 0, df: 0 };
+    if (!dayMap[d]) dayMap[d] = { output: 0, df: 0, fg: 0 };
     dayMap[d].output += Number(r.output_qty) || 0;
+    // v_product_output มี fg_qty ด้วย (ถ้า view มี field นี้)
+    if (r.fg_qty !== undefined) dayMap[d].fg += Number(r.fg_qty) || 0;
   });
   PRODUCT_DF_DATA.forEach(r => {
     if (r.machine_name !== selMC) return;
     const d = r.record_date;
-    if (!dayMap[d]) dayMap[d] = { output: 0, df: 0 };
+    if (!dayMap[d]) dayMap[d] = { output: 0, df: 0, fg: 0 };
     dayMap[d].df += Number(r.df_qty) || 0;
   });
   const daysSorted = Object.keys(dayMap).sort();
@@ -1210,8 +1213,11 @@ function buildMCCharts(){
     latestDay = daysSorted.at(-1);
     const x = dayMap[latestDay];
     latestDayOutput = x.output;
+    latestDayFG = x.fg;
     latestDayDF = x.df;
-    latestDayPct = x.output > 0 ? +(x.df / x.output * 100).toFixed(2) : 0;
+    // v9.6: Laminate ใช้ FG เป็นตัวหาร (เพราะเป็นเครื่องเดียวที่รวม laminate + die cut)
+    const denom = (selMC === 'Laminate') ? x.fg : x.output;
+    latestDayPct = denom > 0 ? +(x.df / denom * 100).toFixed(2) : 0;
   }
   // แปลงวันที่เป็นรูปแบบไทย (พ.ศ.)
   function fmtDayTH(iso){
@@ -1222,7 +1228,7 @@ function buildMCCharts(){
   const dayVsTg = (latestDayPct !== null && tg > 0) ? +(latestDayPct/tg*100).toFixed(1) : 0;
   const dayCls = latestDayPct === null ? 'n' : dayVsTg >= 100 ? 'd' : dayVsTg >= 75 ? 'w' : 'ok';
   const latestDayHTML = latestDayPct !== null
-    ? `<div class="kpi ${dayCls}"><div class="kl">%Defect วันล่าสุด (${fmtDayTH(latestDay)})</div><div class="kv ${dayCls}">${latestDayPct.toFixed(2)}%</div><div class="ks">ของดี ${Math.round(latestDayOutput).toLocaleString()} · เสีย ${Math.round(latestDayDF).toLocaleString()}</div></div>`
+    ? `<div class="kpi ${dayCls}"><div class="kl">%Defect วันล่าสุด (${fmtDayTH(latestDay)})</div><div class="kv ${dayCls}">${latestDayPct.toFixed(2)}%</div><div class="ks">${selMC === 'Laminate' ? 'ของดีสำเร็จรูป ' + Math.round(latestDayFG).toLocaleString() : 'ของดี ' + Math.round(latestDayOutput).toLocaleString()} · เสีย ${Math.round(latestDayDF).toLocaleString()}</div></div>`
     : `<div class="kpi"><div class="kl">%Defect วันล่าสุด</div><div class="kv n">—</div><div class="ks">ไม่มีข้อมูล</div></div>`;
 
   document.getElementById('mc-kpis').innerHTML=`
@@ -1678,8 +1684,10 @@ function buildProductView(){
     if (r.product_name !== pvSelProduct) return;
     if (r.record_date < cutoffStr) return;
     const m = r.machine_name;
-    if (!byMachine[m]) byMachine[m] = { machine: m, output: 0, df: 0, monthly: {} };
+    if (!byMachine[m]) byMachine[m] = { machine: m, output: 0, fg: 0, df: 0, monthly: {} };
     byMachine[m].output += Number(r.output_qty) || 0;
+    // v9.6: เก็บ fg_qty ด้วย (ถ้า view มี) — ใช้สำหรับ Laminate
+    if (r.fg_qty !== undefined) byMachine[m].fg += Number(r.fg_qty) || 0;
     const ym = r.record_date.substring(0, 7);
     if (!byMachine[m].monthly[ym]) byMachine[m].monthly[ym] = { output: 0, df: 0 };
     byMachine[m].monthly[ym].output += Number(r.output_qty) || 0;
@@ -1688,7 +1696,7 @@ function buildProductView(){
     if (r.product_name !== pvSelProduct) return;
     if (r.record_date < cutoffStr) return;
     const m = r.machine_name;
-    if (!byMachine[m]) byMachine[m] = { machine: m, output: 0, df: 0, monthly: {} };
+    if (!byMachine[m]) byMachine[m] = { machine: m, output: 0, fg: 0, df: 0, monthly: {} };
     byMachine[m].df += Number(r.df_qty) || 0;
     const ym = r.record_date.substring(0, 7);
     if (!byMachine[m].monthly[ym]) byMachine[m].monthly[ym] = { output: 0, df: 0 };
@@ -1703,8 +1711,10 @@ function buildProductView(){
   }
   
   // คำนวณ %Defect ต่อเครื่อง
+  // v9.6: Laminate ใช้ DF/FG, เครื่องอื่นใช้ DF/Output
   machines.forEach(m => {
-    m.pct = m.output > 0 ? (m.df / m.output * 100) : null;
+    const denom = (m.machine === 'Laminate') ? m.fg : m.output;
+    m.pct = denom > 0 ? (m.df / denom * 100) : null;
   });
   
   // KPI รวม
