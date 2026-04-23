@@ -93,6 +93,9 @@ body{font-family:"IBM Plex Sans Thai",sans-serif;background:var(--bg);color:var(
 .cval::-webkit-outer-spin-button,
 .cval::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
 .cval:focus{outline:none;border-color:var(--blue)}
+/* ✨ placeholder 0 จาง ๆ — เห็นว่าช่องเก็บตัวเลข แต่ไม่รกตา */
+.cval::placeholder{color:var(--t3);opacity:.45;font-weight:400}
+[data-theme="light"] .cval::placeholder{color:#cbd5e1;opacity:.9}
 .add-df{margin-top:4px;display:flex;gap:6px}
 .add-df select{flex:1;padding:10px 12px;border:1px dashed var(--bdr);border-radius:8px;background:transparent;color:var(--t2);font-family:inherit;font-size:13px;-webkit-appearance:none;appearance:none}
 .add-df select:focus{outline:none;color:var(--text);border-color:var(--blue)}
@@ -1538,34 +1541,36 @@ function makeCounter(type, kind, removable = false, rowIndex = 0) {
   const val = state.values[type.type_id] || 0;
   if (val > 0) row.classList.add('has-value');
   
+  // ✨ แสดงเป็นค่าว่างถ้า 0, แสดงเลขถ้ามีค่า — กันพิมพ์แล้วกลายเป็น 09/90
+  const displayVal = val > 0 ? val : '';
+  
   row.innerHTML = `
     <div class="counter-label">
       ${removable ? `<span class="rm" title="ลบ">×</span>` : ''}
       ${type.name}
     </div>
     <div class="counter-ctrl">
-      <input type="number" class="cval ${kind}" value="${val}" min="0" inputmode="numeric">
+      <input type="number" class="cval ${kind}" value="${displayVal}" min="0" inputmode="numeric" placeholder="0">
     </div>
   `;
   
   const input = row.querySelector('.cval');
   const update = (v) => {
-    v = Math.max(0, parseInt(v) || 0);
-    input.value = v;
-    if (v > 0 || kind === 'ok' || kind === 'fg') {
-      state.values[type.type_id] = v;
-    } else {
-      // DF ที่เป็น 0 ยังเก็บ key ไว้ (ไม่ลบ)
-      state.values[type.type_id] = v;
-    }
-    row.classList.toggle('has-value', v > 0);
+    // ถ้า input ว่าง → เก็บเป็น 0 (ไม่แสดง)
+    const isEmpty = v === '' || v === null || v === undefined;
+    const num = isEmpty ? 0 : Math.max(0, parseInt(v) || 0);
+    
+    // แสดงค่า: ถ้า 0 ให้ว่าง, ถ้ามีค่าให้โชว์
+    input.value = num > 0 ? num : '';
+    
+    state.values[type.type_id] = num;
+    row.classList.toggle('has-value', num > 0);
     updateSummary();
     saveDraft();
   };
   
   input.onchange = () => update(input.value);
-  input.onfocus = () => input.select();
-  
+  // ไม่ต้อง select() แล้ว — เพราะช่องว่างอยู่ พิมพ์ 9 ได้ 9 เลย
   const rm = row.querySelector('.rm');
   if (rm) {
     rm.onclick = () => {
