@@ -1596,6 +1596,22 @@ const PV_RANGES = [
   {months: 12, label: '12 เดือน'}
 ];
 
+// v24: ตรวจจับชื่อสินค้าที่เป็น "combo" (บันทึกหลายสินค้ารวมกัน) — sync กับ PWA index.html
+// Combo มี 2 รูปแบบที่พบใน data จริง:
+//   1. คั่นด้วย comma  → "AQP, SCE, TCPB, TYP"
+//   2. คั่นด้วย space (ทุก token เป็นรหัสย่อล้วน 2-5 ตัวอักษร อาจมีจุดต่อท้าย, ≥3 token)
+//      → "TVP FWS WWC KLIT", "SCE. TW. FWS. ZTH. TUS. TYP"
+// เกณฑ์ ≥3 token + รหัสย่อล้วน ป้องกันชื่อจริง 2 คำ เช่น "AT CP", "Johnson TOA"
+// หมายเหตุ: ใช้เฉพาะใน "ค้นหารายสินค้า" (Product View) — ไม่ใช้กับ Product Pareto รายเครื่อง
+function isComboName(name){
+  const s = String(name || '').trim();
+  if (!s) return false;
+  if (s.includes(',')) return true;
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 3 && tokens.every(t => /^[A-Za-z]{2,5}\.?$/.test(t))) return true;
+  return false;
+}
+
 // สร้าง list ของ products ทั้งหมดพร้อมข้อมูลสรุป
 function getAllProductsIndex(){
   const prodIdx = {};
@@ -1611,9 +1627,9 @@ function getAllProductsIndex(){
     prodIdx[p].df += Number(r.df_qty) || 0;
     prodIdx[p].machines.add(r.machine_name);
   });
-  // v9: filter เฉพาะ single product (ไม่มี comma) เหมือน PWA
+  // v24: filter combo ออก (รูปแบบ comma + รูปแบบ space-abbr)
   return Object.values(prodIdx)
-    .filter(x => x.product && !x.product.includes(','))
+    .filter(x => x.product && !isComboName(x.product))
     .map(x => ({
       ...x,
       machineCount: x.machines.size,
