@@ -913,6 +913,34 @@ async function loadMeta() {
       });
     }
   });
+  
+  // v9.6: แตกสินค้าที่บันทึกรวม (มี comma) ออกเป็นสินค้าเดี่ยว
+  // เพื่อให้ autocomplete แนะนำได้ แม้สินค้านั้นเคยถูกบันทึกแบบรวมเท่านั้น
+  // เช่น row "CAS-76xT10, ZTH-76xT10, TYP-30xT3" → เพิ่ม ZTH-76xT10 เข้า list ด้วย
+  // count = 0 เพราะไม่ทราบจำนวนจริงของสินค้าเดี่ยว (combo row นับรวมทั้งกลุ่ม)
+  (productsRaw || []).forEach(r => {
+    const fullName = (r.product_name || '').trim();
+    if (!fullName.includes(',')) return; // single product แล้ว ไม่ต้องแตก
+    const parts = fullName.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) return;
+    const machines = Array.isArray(r.machines) ? r.machines : [];
+    parts.forEach(part => {
+      if (!part || part === '(ไม่ระบุสินค้า)') return;
+      const existing = productMap.get(part);
+      if (existing) {
+        // มี part นี้อยู่แล้ว (อาจมาจาก single row หรือจาก combo อื่น) → merge machines
+        existing.machines = [...new Set([...existing.machines, ...machines])];
+        // ไม่บวก count เพราะ count ของ combo row ไม่ได้สะท้อนความถี่ของ part เดี่ยว
+      } else {
+        productMap.set(part, {
+          name: part,
+          machines: [...machines],
+          count: 0
+        });
+      }
+    });
+  });
+  
   const products = Array.from(productMap.values()).sort((a, b) => b.count - a.count);
   
   return { depts, machines, staff, types, defaults, products, mcTopDf };
