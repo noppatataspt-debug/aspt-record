@@ -1029,17 +1029,37 @@ function handleProductInput(idx, value){
 }
 
 // v9.7: ตรวจจับชื่อสินค้าที่เป็น "combo" (บันทึกหลายสินค้ารวมกัน)
-// Combo มี 2 รูปแบบที่พบใน data จริง:
-//   1. คั่นด้วย comma  → "AQP, SCE, TCPB, TYP"
-//   2. คั่นด้วย space (ทุก token เป็นรหัสย่อล้วน 2-5 ตัวอักษร อาจมีจุดต่อท้าย, ≥3 token)
+// Combo มีหลายรูปแบบที่พบใน data จริง:
+//   1. คั่นด้วย comma  → "AQP, SCE, TCPB, TYP", "CAS-76xT10, ZTH-76xT10"
+//   2. คั่นด้วย space (≥3 token + ทุก token เป็นรหัสย่อล้วน 2-5 ตัวอักษร อาจมีจุดต่อท้าย)
 //      → "TVP FWS WWC KLIT", "SCE. TW. FWS. ZTH. TUS. TYP"
-// เกณฑ์ ≥3 token + รหัสย่อล้วน ป้องกันชื่อจริง 2 คำ เช่น "AT CP", "Johnson TOA"
+//   3. คั่นด้วย dash (≥3 part + ทุก part มี structure เดียวกัน)
+//      → "TVP-FWS-WWC" (ทุกตัวเป็นตัวอักษรล้วน)
+//      → "SKIC6750-SKIC4400-SKIC5300" (ทุกตัวเป็น [letters][digits])
+// เกณฑ์ ≥3 token/part ป้องกัน false positive กับชื่อจริง 2 ส่วน เช่น
+//   "AT CP", "Johnson TOA", "ZTH-76xT10", "SKIC-5370"
 function isComboName(name){
   const s = String(name || '').trim();
   if (!s) return false;
+  
+  // 1. มี comma
   if (s.includes(',')) return true;
-  const tokens = s.split(/\s+/).filter(Boolean);
-  if (tokens.length >= 3 && tokens.every(t => /^[A-Za-z]{2,5}\.?$/.test(t))) return true;
+  
+  // 2. คั่นด้วย space — ทุก token เป็นรหัสย่อล้วน
+  const spaceTokens = s.split(/\s+/).filter(Boolean);
+  if (spaceTokens.length >= 3 && spaceTokens.every(t => /^[A-Za-z]{2,5}\.?$/.test(t))) {
+    return true;
+  }
+  
+  // 3. คั่นด้วย dash — ทุก part มี structure ใกล้เคียงกัน
+  const dashParts = s.split('-').filter(Boolean);
+  if (dashParts.length >= 3) {
+    // 3a. ทุก part เป็นตัวอักษรล้วน 2-5 ตัว → "TVP-FWS-WWC"
+    if (dashParts.every(p => /^[A-Za-z]{2,5}\.?$/.test(p))) return true;
+    // 3b. ทุก part เป็น [letters][digits] รูปแบบเดียวกัน → "SKIC6750-SKIC4400-SKIC5300"
+    if (dashParts.every(p => /^[A-Za-z]+\d+$/.test(p))) return true;
+  }
+  
   return false;
 }
 
