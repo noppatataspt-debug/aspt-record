@@ -1,7 +1,27 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.4 - เพิ่ม zebra striping ใน DF rows (สลับสีเทาอ่อน-ขาว)
+// v2.5 - เปลี่ยนสี %DF ตาม KPI Target ของแต่ละเครื่อง
+//        + แสดง Target คู่กับ %DF ในข้อความ
 // ============================================================
+
+// KPI Target ของแต่ละเครื่อง (ดึงมาจาก dashboard.html)
+// ใช้หลักการเดียวกับ dashboard เพื่อให้สีสอดคล้องกัน
+const MC_TARGETS = {
+  'บ้านหว้า 1': 7,
+  'บ้านหว้า 2': 3,
+  'ไฮเทค': 1.45,
+  'โรจนะ': 1.65,
+  'บางนา': 3,
+  'ตะวันออก': 3.3,
+  'ตะวันตก': 4.5,
+  'SL': 0.05,
+  'VB': 3.3,
+  'Laminate': 20,
+  'LAM-SHEET': 3
+};
+
+// Default target ถ้าไม่เจอเครื่องในตาราง
+const DEFAULT_TARGET = 5;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -130,19 +150,61 @@ function buildSummary(records) {
     ? ((dfTotal / outputTotal) * 100).toFixed(2)
     : '0.00';
 
+  // หา Target ของเครื่องนี้
+  const machineName = String(first.machine_name || '').trim();
+  const target = MC_TARGETS[machineName] !== undefined
+    ? MC_TARGETS[machineName]
+    : DEFAULT_TARGET;
+
   return {
     date: first.record_date || '',
     shift: first.shift || '-',
     dept: first.dept_name || '-',
-    machine: first.machine_name || '-',
+    machine: machineName || '-',
     staff: first.staff_name || '-',
     products: Array.from(products).join(', ') || '-',
     outputTotal,
     fgTotal,
     dfTotal,
     dfPercent,
-    dfDetails
+    dfDetails,
+    target,
+    hasTarget: MC_TARGETS[machineName] !== undefined
   };
+}
+
+// Helper: คำนวณสถานะ %DF เทียบกับ Target
+function getDfStatus(dfPercent, target) {
+  const dfNum = parseFloat(dfPercent);
+
+  if (dfNum > target) {
+    // เกิน Target → แดง
+    return {
+      status: 'over',
+      label: 'เกิน Target',
+      headerColor: '#B91C1C',
+      bgColor: '#FEE2E2',
+      textColor: '#7F1D1D'
+    };
+  } else if (dfNum > target * 0.75) {
+    // ใกล้ Target (75-100%) → ส้ม
+    return {
+      status: 'warning',
+      label: 'ใกล้ Target',
+      headerColor: '#C2410C',
+      bgColor: '#FFEDD5',
+      textColor: '#7C2D12'
+    };
+  } else {
+    // ผ่าน Target → เขียว
+    return {
+      status: 'ok',
+      label: 'ผ่าน Target',
+      headerColor: '#0F6E56',
+      bgColor: '#EAF3DE',
+      textColor: '#173404'
+    };
+  }
 }
 
 function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
@@ -197,7 +259,42 @@ function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
   };
 }
 
-// Helper: สร้างแถว DF พร้อม zebra striping
+// Helper: สร้างกล่อง %DF พิเศษ ที่แสดง Target ด้วย
+function dfPercentBox(dfPercent, target, hasTarget, status) {
+  const subText = hasTarget
+    ? `Target ${target}% • ${status.label}`
+    : `ไม่มี Target กำหนด`;
+
+  return {
+    type: 'box',
+    layout: 'vertical',
+    flex: 1,
+    backgroundColor: status.bgColor,
+    cornerRadius: '8px',
+    paddingAll: '10px',
+    contents: [
+      { type: 'text', text: '%DF', size: 'xxs', color: status.textColor },
+      {
+        type: 'text',
+        text: `${dfPercent}%`,
+        size: 'lg',
+        weight: 'bold',
+        color: status.textColor,
+        margin: 'xs',
+        adjustMode: 'shrink-to-fit'
+      },
+      {
+        type: 'text',
+        text: subText,
+        size: 'xxs',
+        color: status.textColor,
+        margin: 'xs',
+        wrap: true
+      }
+    ]
+  };
+}
+
 function dfRow(name, qty, isEven) {
   return {
     type: 'box',
@@ -235,12 +332,14 @@ function buildFlexMessage(s) {
     ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
     : String(s.date);
 
-  // สร้างรายการ DF พร้อม zebra striping
+  // คำนวณสถานะตาม KPI
+  const status = getDfStatus(s.dfPercent, s.target);
+
+  // สร้างรายการ DF
   const dfRows = [];
   const dfToShow = s.dfDetails.slice(0, 5);
 
   dfToShow.forEach((d, index) => {
-    // index 0, 2, 4 = แถวคู่ (สีเทา), index 1, 3 = แถวคี่ (สีขาว)
     dfRows.push(dfRow(d.name, d.qty, index % 2 === 0));
   });
 
@@ -266,26 +365,13 @@ function buildFlexMessage(s) {
     });
   }
 
-  const dfNum = parseFloat(s.dfPercent);
-  let headerColor = '#0F6E56';
-  let dfBgColor = '#FAEEDA';
-  let dfTextColor = '#412402';
-
-  if (dfNum >= 5) {
-    headerColor = '#B91C1C';
-    dfBgColor = '#FEE2E2';
-    dfTextColor = '#7F1D1D';
-  } else if (dfNum >= 2) {
-    headerColor = '#C2410C';
-    dfBgColor = '#FFEDD5';
-    dfTextColor = '#7C2D12';
-  }
-
+  // 4 กล่อง 2x2
   const metricsGrid = {
     type: 'box',
     layout: 'vertical',
     spacing: 'sm',
     contents: [
+      // แถวบน: งานดี | Finish Good
       {
         type: 'box',
         layout: 'horizontal',
@@ -295,13 +381,14 @@ function buildFlexMessage(s) {
           metricBox('Finish Good', s.fgTotal.toLocaleString(), 'kg', '#E6F1FB', '#185FA5', '#0C447C')
         ]
       },
+      // แถวล่าง: ของเสีย | %DF (พร้อม Target)
       {
         type: 'box',
         layout: 'horizontal',
         spacing: 'sm',
         contents: [
           metricBox('ของเสีย', s.dfTotal.toLocaleString(), 'kg', '#FCEBEB', '#A32D2D', '#501313'),
-          metricBox('%DF', `${s.dfPercent}%`, null, dfBgColor, dfTextColor, dfTextColor)
+          dfPercentBox(s.dfPercent, s.target, s.hasTarget, status)
         ]
       }
     ]
@@ -309,14 +396,14 @@ function buildFlexMessage(s) {
 
   return {
     type: 'flex',
-    altText: `บันทึกการผลิต ${s.dept} กะ${s.shift} %DF ${s.dfPercent}%`,
+    altText: `บันทึกการผลิต ${s.dept} กะ${s.shift} %DF ${s.dfPercent}% (Target ${s.target}%)`,
     contents: {
       type: 'bubble',
       size: 'mega',
       header: {
         type: 'box',
         layout: 'vertical',
-        backgroundColor: headerColor,
+        backgroundColor: status.headerColor,
         paddingAll: '14px',
         contents: [
           {
