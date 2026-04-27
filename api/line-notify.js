@@ -1,6 +1,6 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.3 - เปลี่ยนคำเป็นภาษาไทย + เพิ่มหน่วย kg
+// v2.4 - เพิ่ม zebra striping ใน DF rows (สลับสีเทาอ่อน-ขาว)
 // ============================================================
 
 export default async function handler(req, res) {
@@ -145,14 +145,12 @@ function buildSummary(records) {
   };
 }
 
-// Helper: สร้างกล่องตัวเลขสรุป พร้อมหน่วย
 function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
   const contents = [
     { type: 'text', text: label, size: 'xxs', color: labelColor }
   ];
 
   if (unit) {
-    // มีหน่วย: แสดง value + unit ในแถวเดียวกัน
     contents.push({
       type: 'box',
       layout: 'baseline',
@@ -177,7 +175,6 @@ function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
       ]
     });
   } else {
-    // ไม่มีหน่วย (เช่น %DF)
     contents.push({
       type: 'text',
       text: String(value),
@@ -200,40 +197,51 @@ function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
   };
 }
 
+// Helper: สร้างแถว DF พร้อม zebra striping
+function dfRow(name, qty, isEven) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    paddingAll: '8px',
+    paddingStart: '10px',
+    paddingEnd: '10px',
+    backgroundColor: isEven ? '#F5F5F5' : '#FFFFFF',
+    cornerRadius: '4px',
+    contents: [
+      {
+        type: 'text',
+        text: String(name),
+        size: 'sm',
+        color: '#444444',
+        flex: 5,
+        wrap: true
+      },
+      {
+        type: 'text',
+        text: `${qty.toLocaleString()} kg`,
+        size: 'sm',
+        color: '#111111',
+        align: 'end',
+        weight: 'bold',
+        flex: 3
+      }
+    ]
+  };
+}
+
 function buildFlexMessage(s) {
   const dateParts = String(s.date).split('-');
   const dateFormatted = dateParts.length === 3
     ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
     : String(s.date);
 
-  // สร้างรายการ DF (เพิ่มหน่วย kg)
+  // สร้างรายการ DF พร้อม zebra striping
   const dfRows = [];
   const dfToShow = s.dfDetails.slice(0, 5);
 
-  dfToShow.forEach((d) => {
-    dfRows.push({
-      type: 'box',
-      layout: 'horizontal',
-      contents: [
-        {
-          type: 'text',
-          text: String(d.name),
-          size: 'sm',
-          color: '#555555',
-          flex: 5,
-          wrap: true
-        },
-        {
-          type: 'text',
-          text: `${d.qty.toLocaleString()} kg`,
-          size: 'sm',
-          color: '#111111',
-          align: 'end',
-          weight: 'bold',
-          flex: 3
-        }
-      ]
-    });
+  dfToShow.forEach((d, index) => {
+    // index 0, 2, 4 = แถวคู่ (สีเทา), index 1, 3 = แถวคี่ (สีขาว)
+    dfRows.push(dfRow(d.name, d.qty, index % 2 === 0));
   });
 
   if (s.dfDetails.length > 5) {
@@ -242,7 +250,8 @@ function buildFlexMessage(s) {
       text: `และอีก ${s.dfDetails.length - 5} รายการ`,
       size: 'xs',
       color: '#888888',
-      align: 'center'
+      align: 'center',
+      margin: 'sm'
     });
   }
 
@@ -252,7 +261,8 @@ function buildFlexMessage(s) {
       text: 'ไม่มีของเสีย',
       size: 'sm',
       color: '#047857',
-      align: 'center'
+      align: 'center',
+      margin: 'sm'
     });
   }
 
@@ -271,13 +281,11 @@ function buildFlexMessage(s) {
     dfTextColor = '#7C2D12';
   }
 
-  // 4 กล่อง 2x2
   const metricsGrid = {
     type: 'box',
     layout: 'vertical',
     spacing: 'sm',
     contents: [
-      // แถวบน: งานดี | Finish Good
       {
         type: 'box',
         layout: 'horizontal',
@@ -287,7 +295,6 @@ function buildFlexMessage(s) {
           metricBox('Finish Good', s.fgTotal.toLocaleString(), 'kg', '#E6F1FB', '#185FA5', '#0C447C')
         ]
       },
-      // แถวล่าง: ของเสีย | %DF
       {
         type: 'box',
         layout: 'horizontal',
@@ -411,7 +418,7 @@ function buildFlexMessage(s) {
           {
             type: 'box',
             layout: 'vertical',
-            spacing: 'xs',
+            spacing: 'none',
             contents: dfRows
           }
         ]
