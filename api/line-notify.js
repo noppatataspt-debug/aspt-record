@@ -1,6 +1,6 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.0 - แก้ไข key_type จาก GOOD เป็น Output ตามโครงสร้างจริง
+// v2.1 - แก้ไขปัญหาตัวเลขใหญ่โดนตัด (shrink-to-fit + ลดขนาด font)
 // ============================================================
 
 export default async function handler(req, res) {
@@ -33,7 +33,6 @@ export default async function handler(req, res) {
     const submissionId = record.submission_id;
     console.log('Processing submission:', submissionId);
 
-    // ดึง records ทั้งหมดของ submission_id เดียวกัน
     const allRecords = await fetchSubmissionRecords(
       SUPABASE_URL,
       SUPABASE_KEY,
@@ -46,7 +45,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No records found' });
     }
 
-    // ป้องกันการส่งซ้ำ: ส่งเฉพาะตอนที่ webhook ยิง record แรก
     const firstRecord = allRecords.reduce((earliest, r) =>
       new Date(r.created_at) < new Date(earliest.created_at) ? r : earliest
     );
@@ -58,15 +56,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // สร้างสรุปข้อมูล
     const summary = buildSummary(allRecords);
     console.log('Summary:', JSON.stringify(summary));
 
-    // สร้าง Flex Message
     const flexMessage = buildFlexMessage(summary);
     console.log('Flex message built, sending to LINE...');
 
-    // ส่งไป LINE
     await sendLineMessage(LINE_TOKEN, LINE_GROUP_ID, flexMessage);
 
     console.log('LINE message sent successfully!');
@@ -83,9 +78,6 @@ export default async function handler(req, res) {
   }
 }
 
-// ============================================================
-// Helper: ดึง records ของ submission_id เดียวกัน
-// ============================================================
 async function fetchSubmissionRecords(supabaseUrl, supabaseKey, submissionId) {
   const url = `${supabaseUrl}/rest/v1/production_records?submission_id=eq.${encodeURIComponent(submissionId)}&select=*`;
 
@@ -104,9 +96,6 @@ async function fetchSubmissionRecords(supabaseUrl, supabaseKey, submissionId) {
   return await response.json();
 }
 
-// ============================================================
-// Helper: สรุปข้อมูลจาก records
-// ============================================================
 function buildSummary(records) {
   const first = records[0];
 
@@ -117,15 +106,11 @@ function buildSummary(records) {
 
   records.forEach((r) => {
     const qty = Number(r.qty) || 0;
-    // เปรียบเทียบแบบ case-insensitive และรองรับหลายชื่อ
     const keyType = String(r.key_type || '').toUpperCase().trim();
 
-    // ของดี: รองรับทั้ง Output, GOOD, OK, FG
     if (keyType === 'OUTPUT' || keyType === 'GOOD' || keyType === 'OK' || keyType === 'FG') {
       goodTotal += qty;
-    }
-    // ของเสีย: รองรับ DF, NG, DEFECT
-    else if (keyType === 'DF' || keyType === 'NG' || keyType === 'DEFECT') {
+    } else if (keyType === 'DF' || keyType === 'NG' || keyType === 'DEFECT') {
       dfTotal += qty;
       if (qty > 0) {
         dfDetails.push({
@@ -156,17 +141,12 @@ function buildSummary(records) {
   };
 }
 
-// ============================================================
-// Helper: สร้าง Flex Message
-// ============================================================
 function buildFlexMessage(s) {
-  // Format วันที่ DD/MM/YYYY
   const dateParts = String(s.date).split('-');
   const dateFormatted = dateParts.length === 3
     ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
     : String(s.date);
 
-  // สร้างรายการ DF
   const dfRows = [];
   const dfToShow = s.dfDetails.slice(0, 5);
 
@@ -185,7 +165,7 @@ function buildFlexMessage(s) {
         },
         {
           type: 'text',
-          text: String(d.qty),
+          text: String(d.qty.toLocaleString()),
           size: 'sm',
           color: '#111111',
           align: 'end',
@@ -216,7 +196,6 @@ function buildFlexMessage(s) {
     });
   }
 
-  // กำหนดสี header ตาม %DF
   const dfNum = parseFloat(s.dfPercent);
   let headerColor = '#0F6E56';
   let dfBgColor = '#FAEEDA';
@@ -237,7 +216,7 @@ function buildFlexMessage(s) {
     altText: `บันทึกการผลิต ${s.dept} กะ${s.shift} %DF ${s.dfPercent}%`,
     contents: {
       type: 'bubble',
-      size: 'kilo',
+      size: 'mega',  // เปลี่ยนจาก kilo เป็น mega ให้กว้างขึ้น
       header: {
         type: 'box',
         layout: 'vertical',
@@ -271,12 +250,7 @@ function buildFlexMessage(s) {
             type: 'box',
             layout: 'vertical',
             contents: [
-              {
-                type: 'text',
-                text: 'แผนก / เครื่อง',
-                size: 'xs',
-                color: '#888888'
-              },
+              { type: 'text', text: 'แผนก / เครื่อง', size: 'xs', color: '#888888' },
               {
                 type: 'text',
                 text: `${s.dept} • ${s.machine}`,
@@ -336,6 +310,7 @@ function buildFlexMessage(s) {
             color: '#555555',
             weight: 'bold'
           },
+          // กล่อง 3 ช่อง: ของดี / DF / รวม - ใช้ vertical layout แทน horizontal เพื่อให้ตัวเลขใหญ่ๆ ไม่โดนตัด
           {
             type: 'box',
             layout: 'horizontal',
@@ -353,10 +328,11 @@ function buildFlexMessage(s) {
                   {
                     type: 'text',
                     text: s.goodTotal.toLocaleString(),
-                    size: 'lg',
+                    size: 'md',
                     weight: 'bold',
                     color: '#173404',
-                    margin: 'xs'
+                    margin: 'xs',
+                    adjustMode: 'shrink-to-fit'
                   }
                 ]
               },
@@ -372,10 +348,11 @@ function buildFlexMessage(s) {
                   {
                     type: 'text',
                     text: s.dfTotal.toLocaleString(),
-                    size: 'lg',
+                    size: 'md',
                     weight: 'bold',
                     color: '#501313',
-                    margin: 'xs'
+                    margin: 'xs',
+                    adjustMode: 'shrink-to-fit'
                   }
                 ]
               },
@@ -391,10 +368,11 @@ function buildFlexMessage(s) {
                   {
                     type: 'text',
                     text: s.total.toLocaleString(),
-                    size: 'lg',
+                    size: 'md',
                     weight: 'bold',
                     color: '#2C2C2A',
-                    margin: 'xs'
+                    margin: 'xs',
+                    adjustMode: 'shrink-to-fit'
                   }
                 ]
               }
@@ -437,7 +415,8 @@ function buildFlexMessage(s) {
                 weight: 'bold',
                 color: dfTextColor,
                 align: 'end',
-                gravity: 'center'
+                gravity: 'center',
+                adjustMode: 'shrink-to-fit'
               }
             ]
           }
@@ -447,9 +426,6 @@ function buildFlexMessage(s) {
   };
 }
 
-// ============================================================
-// Helper: ส่งข้อความเข้า LINE
-// ============================================================
 async function sendLineMessage(token, groupId, message) {
   const response = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
