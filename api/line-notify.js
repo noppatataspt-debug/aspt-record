@@ -1,11 +1,8 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.5 - เปลี่ยนสี %DF ตาม KPI Target ของแต่ละเครื่อง
-//        + แสดง Target คู่กับ %DF ในข้อความ
+// v2.6 - Layout 3 columns + %DF banner ด้านล่าง
 // ============================================================
 
-// KPI Target ของแต่ละเครื่อง (ดึงมาจาก dashboard.html)
-// ใช้หลักการเดียวกับ dashboard เพื่อให้สีสอดคล้องกัน
 const MC_TARGETS = {
   'บ้านหว้า 1': 7,
   'บ้านหว้า 2': 3,
@@ -20,7 +17,6 @@ const MC_TARGETS = {
   'LAM-SHEET': 3
 };
 
-// Default target ถ้าไม่เจอเครื่องในตาราง
 const DEFAULT_TARGET = 5;
 
 export default async function handler(req, res) {
@@ -150,7 +146,6 @@ function buildSummary(records) {
     ? ((dfTotal / outputTotal) * 100).toFixed(2)
     : '0.00';
 
-  // หา Target ของเครื่องนี้
   const machineName = String(first.machine_name || '').trim();
   const target = MC_TARGETS[machineName] !== undefined
     ? MC_TARGETS[machineName]
@@ -173,12 +168,10 @@ function buildSummary(records) {
   };
 }
 
-// Helper: คำนวณสถานะ %DF เทียบกับ Target
 function getDfStatus(dfPercent, target) {
   const dfNum = parseFloat(dfPercent);
 
   if (dfNum > target) {
-    // เกิน Target → แดง
     return {
       status: 'over',
       label: 'เกิน Target',
@@ -187,7 +180,6 @@ function getDfStatus(dfPercent, target) {
       textColor: '#7F1D1D'
     };
   } else if (dfNum > target * 0.75) {
-    // ใกล้ Target (75-100%) → ส้ม
     return {
       status: 'warning',
       label: 'ใกล้ Target',
@@ -196,7 +188,6 @@ function getDfStatus(dfPercent, target) {
       textColor: '#7C2D12'
     };
   } else {
-    // ผ่าน Target → เขียว
     return {
       status: 'ok',
       label: 'ผ่าน Target',
@@ -207,89 +198,98 @@ function getDfStatus(dfPercent, target) {
   }
 }
 
+// กล่องตัวเลขสรุป (3 columns) - ขนาดเล็กลงให้พอดี
 function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
-  const contents = [
-    { type: 'text', text: label, size: 'xxs', color: labelColor }
-  ];
-
-  if (unit) {
-    contents.push({
-      type: 'box',
-      layout: 'baseline',
-      margin: 'xs',
-      contents: [
-        {
-          type: 'text',
-          text: String(value),
-          size: 'lg',
-          weight: 'bold',
-          color: valueColor,
-          flex: 0,
-          adjustMode: 'shrink-to-fit'
-        },
-        {
-          type: 'text',
-          text: ` ${unit}`,
-          size: 'xs',
-          color: valueColor,
-          flex: 0
-        }
-      ]
-    });
-  } else {
-    contents.push({
-      type: 'text',
-      text: String(value),
-      size: 'lg',
-      weight: 'bold',
-      color: valueColor,
-      margin: 'xs',
-      adjustMode: 'shrink-to-fit'
-    });
-  }
-
   return {
     type: 'box',
     layout: 'vertical',
     flex: 1,
     backgroundColor: bgColor,
     cornerRadius: '8px',
-    paddingAll: '10px',
-    contents: contents
+    paddingAll: '8px',
+    contents: [
+      {
+        type: 'text',
+        text: label,
+        size: 'xxs',
+        color: labelColor,
+        wrap: true
+      },
+      {
+        type: 'box',
+        layout: 'baseline',
+        margin: 'xs',
+        contents: [
+          {
+            type: 'text',
+            text: String(value),
+            size: 'md',
+            weight: 'bold',
+            color: valueColor,
+            flex: 0,
+            adjustMode: 'shrink-to-fit'
+          },
+          {
+            type: 'text',
+            text: ` ${unit}`,
+            size: 'xxs',
+            color: valueColor,
+            flex: 0
+          }
+        ]
+      }
+    ]
   };
 }
 
-// Helper: สร้างกล่อง %DF พิเศษ ที่แสดง Target ด้วย
-function dfPercentBox(dfPercent, target, hasTarget, status) {
+// แถบ %DF ยาวเต็มความกว้าง พร้อม Target และสถานะ
+function dfBanner(dfPercent, target, hasTarget, status) {
   const subText = hasTarget
     ? `Target ${target}% • ${status.label}`
-    : `ไม่มี Target กำหนด`;
+    : 'ไม่มี Target กำหนด';
 
   return {
     type: 'box',
     layout: 'vertical',
-    flex: 1,
     backgroundColor: status.bgColor,
     cornerRadius: '8px',
-    paddingAll: '10px',
+    paddingAll: '14px',
+    margin: 'sm',
     contents: [
-      { type: 'text', text: '%DF', size: 'xxs', color: status.textColor },
+      // แถวบน: Label "%DF" + ตัวเลขใหญ่
       {
-        type: 'text',
-        text: `${dfPercent}%`,
-        size: 'lg',
-        weight: 'bold',
-        color: status.textColor,
-        margin: 'xs',
-        adjustMode: 'shrink-to-fit'
+        type: 'box',
+        layout: 'horizontal',
+        contents: [
+          {
+            type: 'text',
+            text: '%DF',
+            size: 'sm',
+            weight: 'bold',
+            color: status.textColor,
+            gravity: 'center',
+            flex: 0
+          },
+          {
+            type: 'text',
+            text: `${dfPercent}%`,
+            size: 'xxl',
+            weight: 'bold',
+            color: status.textColor,
+            align: 'end',
+            gravity: 'center',
+            adjustMode: 'shrink-to-fit'
+          }
+        ]
       },
+      // แถวล่าง: Target และ status (เล็ก)
       {
         type: 'text',
         text: subText,
-        size: 'xxs',
+        size: 'xs',
         color: status.textColor,
-        margin: 'xs',
-        wrap: true
+        align: 'end',
+        margin: 'sm'
       }
     ]
   };
@@ -332,7 +332,6 @@ function buildFlexMessage(s) {
     ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
     : String(s.date);
 
-  // คำนวณสถานะตาม KPI
   const status = getDfStatus(s.dfPercent, s.target);
 
   // สร้างรายการ DF
@@ -365,34 +364,20 @@ function buildFlexMessage(s) {
     });
   }
 
-  // 4 กล่อง 2x2
-  const metricsGrid = {
+  // 3 กล่องเรียงแนวนอน: งานดี | Finish Good | ของเสีย
+  const metrics3Col = {
     type: 'box',
-    layout: 'vertical',
+    layout: 'horizontal',
     spacing: 'sm',
     contents: [
-      // แถวบน: งานดี | Finish Good
-      {
-        type: 'box',
-        layout: 'horizontal',
-        spacing: 'sm',
-        contents: [
-          metricBox('งานดี', s.outputTotal.toLocaleString(), 'kg', '#EAF3DE', '#3B6D11', '#173404'),
-          metricBox('Finish Good', s.fgTotal.toLocaleString(), 'kg', '#E6F1FB', '#185FA5', '#0C447C')
-        ]
-      },
-      // แถวล่าง: ของเสีย | %DF (พร้อม Target)
-      {
-        type: 'box',
-        layout: 'horizontal',
-        spacing: 'sm',
-        contents: [
-          metricBox('ของเสีย', s.dfTotal.toLocaleString(), 'kg', '#FCEBEB', '#A32D2D', '#501313'),
-          dfPercentBox(s.dfPercent, s.target, s.hasTarget, status)
-        ]
-      }
+      metricBox('งานดี', s.outputTotal.toLocaleString(), 'kg', '#EAF3DE', '#3B6D11', '#173404'),
+      metricBox('Finish Good', s.fgTotal.toLocaleString(), 'kg', '#E6F1FB', '#185FA5', '#0C447C'),
+      metricBox('ของเสีย', s.dfTotal.toLocaleString(), 'kg', '#FCEBEB', '#A32D2D', '#501313')
     ]
   };
+
+  // %DF banner ยาวเต็มความกว้าง
+  const dfPercentBanner = dfBanner(s.dfPercent, s.target, s.hasTarget, status);
 
   return {
     type: 'flex',
@@ -493,7 +478,8 @@ function buildFlexMessage(s) {
             color: '#555555',
             weight: 'bold'
           },
-          metricsGrid,
+          metrics3Col,
+          dfPercentBanner,
           { type: 'separator', margin: 'sm' },
           {
             type: 'text',
