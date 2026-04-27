@@ -1,6 +1,7 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.1 - แก้ไขปัญหาตัวเลขใหญ่โดนตัด (shrink-to-fit + ลดขนาด font)
+// v2.2 - แก้สูตรคำนวณ: ของดี=Output อย่างเดียว, %DF = DF/Output
+//        และเปลี่ยน layout เป็น 2 column × 2 row
 // ============================================================
 
 export default async function handler(req, res) {
@@ -99,7 +100,8 @@ async function fetchSubmissionRecords(supabaseUrl, supabaseKey, submissionId) {
 function buildSummary(records) {
   const first = records[0];
 
-  let goodTotal = 0;
+  let outputTotal = 0;  // Output อย่างเดียว
+  let fgTotal = 0;      // FG แยกต่างหาก
   let dfTotal = 0;
   const dfDetails = [];
   const products = new Set();
@@ -108,8 +110,10 @@ function buildSummary(records) {
     const qty = Number(r.qty) || 0;
     const keyType = String(r.key_type || '').toUpperCase().trim();
 
-    if (keyType === 'OUTPUT' || keyType === 'GOOD' || keyType === 'OK' || keyType === 'FG') {
-      goodTotal += qty;
+    if (keyType === 'OUTPUT') {
+      outputTotal += qty;
+    } else if (keyType === 'FG') {
+      fgTotal += qty;
     } else if (keyType === 'DF' || keyType === 'NG' || keyType === 'DEFECT') {
       dfTotal += qty;
       if (qty > 0) {
@@ -123,8 +127,10 @@ function buildSummary(records) {
     if (r.product_name) products.add(r.product_name);
   });
 
-  const total = goodTotal + dfTotal;
-  const dfPercent = total > 0 ? ((dfTotal / total) * 100).toFixed(2) : '0.00';
+  // %DF = DF / Output × 100 (ตามสูตรของระบบเดิม)
+  const dfPercent = outputTotal > 0
+    ? ((dfTotal / outputTotal) * 100).toFixed(2)
+    : '0.00';
 
   return {
     date: first.record_date || '',
@@ -133,11 +139,35 @@ function buildSummary(records) {
     machine: first.machine_name || '-',
     staff: first.staff_name || '-',
     products: Array.from(products).join(', ') || '-',
-    goodTotal,
+    outputTotal,
+    fgTotal,
     dfTotal,
-    total,
     dfPercent,
     dfDetails
+  };
+}
+
+// Helper: สร้างกล่องตัวเลขสรุป (ใช้ซ้ำได้)
+function metricBox(label, value, bgColor, labelColor, valueColor) {
+  return {
+    type: 'box',
+    layout: 'vertical',
+    flex: 1,
+    backgroundColor: bgColor,
+    cornerRadius: '8px',
+    paddingAll: '10px',
+    contents: [
+      { type: 'text', text: label, size: 'xxs', color: labelColor },
+      {
+        type: 'text',
+        text: String(value),
+        size: 'lg',
+        weight: 'bold',
+        color: valueColor,
+        margin: 'xs',
+        adjustMode: 'shrink-to-fit'
+      }
+    ]
   };
 }
 
@@ -147,6 +177,7 @@ function buildFlexMessage(s) {
     ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
     : String(s.date);
 
+  // สร้างรายการ DF
   const dfRows = [];
   const dfToShow = s.dfDetails.slice(0, 5);
 
@@ -165,7 +196,7 @@ function buildFlexMessage(s) {
         },
         {
           type: 'text',
-          text: String(d.qty.toLocaleString()),
+          text: d.qty.toLocaleString(),
           size: 'sm',
           color: '#111111',
           align: 'end',
@@ -196,27 +227,57 @@ function buildFlexMessage(s) {
     });
   }
 
+  // กำหนดสี header ตาม %DF
   const dfNum = parseFloat(s.dfPercent);
-  let headerColor = '#0F6E56';
+  let headerColor = '#0F6E56';   // เขียว = ดี (< 2%)
   let dfBgColor = '#FAEEDA';
   let dfTextColor = '#412402';
 
   if (dfNum >= 5) {
-    headerColor = '#B91C1C';
+    headerColor = '#B91C1C';     // แดง = แย่ (>= 5%)
     dfBgColor = '#FEE2E2';
     dfTextColor = '#7F1D1D';
   } else if (dfNum >= 2) {
-    headerColor = '#C2410C';
+    headerColor = '#C2410C';     // ส้ม = เตือน (>= 2%)
     dfBgColor = '#FFEDD5';
     dfTextColor = '#7C2D12';
   }
+
+  // 4 กล่อง 2x2: OUTPUT | FG / DF | %DF
+  const metricsGrid = {
+    type: 'box',
+    layout: 'vertical',
+    spacing: 'sm',
+    contents: [
+      // แถวที่ 1: OUTPUT | FG
+      {
+        type: 'box',
+        layout: 'horizontal',
+        spacing: 'sm',
+        contents: [
+          metricBox('OUTPUT', s.outputTotal.toLocaleString(), '#EAF3DE', '#3B6D11', '#173404'),
+          metricBox('FG', s.fgTotal.toLocaleString(), '#E6F1FB', '#185FA5', '#0C447C')
+        ]
+      },
+      // แถวที่ 2: DF | %DF
+      {
+        type: 'box',
+        layout: 'horizontal',
+        spacing: 'sm',
+        contents: [
+          metricBox('DF', s.dfTotal.toLocaleString(), '#FCEBEB', '#A32D2D', '#501313'),
+          metricBox('%DF', `${s.dfPercent}%`, dfBgColor, dfTextColor, dfTextColor)
+        ]
+      }
+    ]
+  };
 
   return {
     type: 'flex',
     altText: `บันทึกการผลิต ${s.dept} กะ${s.shift} %DF ${s.dfPercent}%`,
     contents: {
       type: 'bubble',
-      size: 'mega',  // เปลี่ยนจาก kilo เป็น mega ให้กว้างขึ้น
+      size: 'mega',
       header: {
         type: 'box',
         layout: 'vertical',
@@ -246,6 +307,7 @@ function buildFlexMessage(s) {
         spacing: 'md',
         paddingAll: '16px',
         contents: [
+          // แผนก / เครื่อง
           {
             type: 'box',
             layout: 'vertical',
@@ -261,6 +323,7 @@ function buildFlexMessage(s) {
               }
             ]
           },
+          // วันที่ / กะ / พนักงาน
           {
             type: 'box',
             layout: 'horizontal',
@@ -294,6 +357,7 @@ function buildFlexMessage(s) {
               }
             ]
           },
+          // สินค้า
           {
             type: 'box',
             layout: 'vertical',
@@ -303,6 +367,7 @@ function buildFlexMessage(s) {
             ]
           },
           { type: 'separator', margin: 'sm' },
+          // หัวข้อสรุป
           {
             type: 'text',
             text: 'สรุปการผลิต',
@@ -310,75 +375,10 @@ function buildFlexMessage(s) {
             color: '#555555',
             weight: 'bold'
           },
-          // กล่อง 3 ช่อง: ของดี / DF / รวม - ใช้ vertical layout แทน horizontal เพื่อให้ตัวเลขใหญ่ๆ ไม่โดนตัด
-          {
-            type: 'box',
-            layout: 'horizontal',
-            spacing: 'sm',
-            contents: [
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 1,
-                backgroundColor: '#EAF3DE',
-                cornerRadius: '8px',
-                paddingAll: '10px',
-                contents: [
-                  { type: 'text', text: 'ของดี', size: 'xxs', color: '#3B6D11' },
-                  {
-                    type: 'text',
-                    text: s.goodTotal.toLocaleString(),
-                    size: 'md',
-                    weight: 'bold',
-                    color: '#173404',
-                    margin: 'xs',
-                    adjustMode: 'shrink-to-fit'
-                  }
-                ]
-              },
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 1,
-                backgroundColor: '#FCEBEB',
-                cornerRadius: '8px',
-                paddingAll: '10px',
-                contents: [
-                  { type: 'text', text: 'DF', size: 'xxs', color: '#A32D2D' },
-                  {
-                    type: 'text',
-                    text: s.dfTotal.toLocaleString(),
-                    size: 'md',
-                    weight: 'bold',
-                    color: '#501313',
-                    margin: 'xs',
-                    adjustMode: 'shrink-to-fit'
-                  }
-                ]
-              },
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 1,
-                backgroundColor: '#F1EFE8',
-                cornerRadius: '8px',
-                paddingAll: '10px',
-                contents: [
-                  { type: 'text', text: 'รวม', size: 'xxs', color: '#5F5E5A' },
-                  {
-                    type: 'text',
-                    text: s.total.toLocaleString(),
-                    size: 'md',
-                    weight: 'bold',
-                    color: '#2C2C2A',
-                    margin: 'xs',
-                    adjustMode: 'shrink-to-fit'
-                  }
-                ]
-              }
-            ]
-          },
+          // 2x2 grid
+          metricsGrid,
           { type: 'separator', margin: 'sm' },
+          // รายละเอียด DF
           {
             type: 'text',
             text: 'รายละเอียด DF',
@@ -391,34 +391,6 @@ function buildFlexMessage(s) {
             layout: 'vertical',
             spacing: 'xs',
             contents: dfRows
-          },
-          {
-            type: 'box',
-            layout: 'horizontal',
-            backgroundColor: dfBgColor,
-            cornerRadius: '8px',
-            paddingAll: '12px',
-            margin: 'md',
-            contents: [
-              {
-                type: 'text',
-                text: '%DF',
-                size: 'sm',
-                weight: 'bold',
-                color: dfTextColor,
-                gravity: 'center'
-              },
-              {
-                type: 'text',
-                text: `${s.dfPercent}%`,
-                size: 'xl',
-                weight: 'bold',
-                color: dfTextColor,
-                align: 'end',
-                gravity: 'center',
-                adjustMode: 'shrink-to-fit'
-              }
-            ]
           }
         ]
       }
