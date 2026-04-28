@@ -1,6 +1,8 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.7 - ปรับ layout ส่วนข้อมูลเป็น 2 แถวกระชับ + Label เล็ก
+// v2.8 - Compact info layout
+//        แถว 1: ฉาก • VB    28/04/2026 • กะเช้า
+//        แถว 2: พนักงาน: ฉวีวรรณ | สินค้า: TEST
 // ============================================================
 
 const MC_TARGETS = {
@@ -376,7 +378,7 @@ function buildFlexMessage(s) {
 
   return {
     type: 'flex',
-    altText: `บันทึกการผลิต ${s.dept} กะ${s.shift} %DF ${s.dfPercent}% (Target ${s.target}%)`,
+    altText: `บันทึกการผลิต ${s.dept} • ${s.machine} %DF ${s.dfPercent}% (Target ${s.target}%)`,
     contents: {
       type: 'bubble',
       size: 'mega',
@@ -410,87 +412,76 @@ function buildFlexMessage(s) {
         paddingAll: '16px',
         contents: [
           // ─────────────────────────────────────
-          // ข้อมูลทั่วไป (Layout B2 ใหม่)
-          // แถว 1: ฉาก • VB
-          //         27/04/2026 • กะเช้า
-          // แถว 2: พนักงาน: ดารารัตน์
-          //         สินค้า: test
+          // แถว 1: ชื่อแผนก/เครื่อง + วันที่/กะ
           // ─────────────────────────────────────
           {
             type: 'box',
-            layout: 'vertical',
-            spacing: 'xs',
+            layout: 'baseline',
+            spacing: 'sm',
             contents: [
-              // ชื่อแผนก • เครื่อง (เด่น)
               {
                 type: 'text',
                 text: `${s.dept} • ${s.machine}`,
-                size: 'lg',
+                size: 'md',
                 weight: 'bold',
                 color: '#111111',
-                wrap: true
+                flex: 0
               },
-              // วันที่ • กะ
               {
                 type: 'text',
                 text: `${dateFormatted} • กะ${s.shift}`,
-                size: 'sm',
-                color: '#666666'
+                size: 'xs',
+                color: '#888888',
+                flex: 1,
+                wrap: false
               }
             ]
           },
-          // เว้นช่องว่างเล็กน้อย
+          // ─────────────────────────────────────
+          // แถว 2: พนักงาน | สินค้า
+          // ─────────────────────────────────────
           {
             type: 'box',
-            layout: 'vertical',
-            spacing: 'xs',
+            layout: 'baseline',
             margin: 'sm',
             contents: [
-              // พนักงาน: ดารารัตน์
               {
-                type: 'box',
-                layout: 'baseline',
-                contents: [
-                  {
-                    type: 'text',
-                    text: 'พนักงาน: ',
-                    size: 'sm',
-                    color: '#888888',
-                    flex: 0
-                  },
-                  {
-                    type: 'text',
-                    text: String(s.staff),
-                    size: 'sm',
-                    color: '#222222',
-                    weight: 'bold',
-                    flex: 0,
-                    wrap: true
-                  }
-                ]
+                type: 'text',
+                text: 'พนักงาน:',
+                size: 'xs',
+                color: '#888888',
+                flex: 0
               },
-              // สินค้า: test
               {
-                type: 'box',
-                layout: 'baseline',
-                contents: [
-                  {
-                    type: 'text',
-                    text: 'สินค้า: ',
-                    size: 'sm',
-                    color: '#888888',
-                    flex: 0
-                  },
-                  {
-                    type: 'text',
-                    text: String(s.products),
-                    size: 'sm',
-                    color: '#222222',
-                    weight: 'bold',
-                    flex: 1,
-                    wrap: true
-                  }
-                ]
+                type: 'text',
+                text: ` ${s.staff}`,
+                size: 'xs',
+                color: '#222222',
+                weight: 'bold',
+                flex: 0
+              },
+              {
+                type: 'text',
+                text: '  |  ',
+                size: 'xs',
+                color: '#DDDDDD',
+                flex: 0
+              },
+              {
+                type: 'text',
+                text: 'สินค้า:',
+                size: 'xs',
+                color: '#888888',
+                flex: 0
+              },
+              {
+                type: 'text',
+                text: ` ${s.products}`,
+                size: 'xs',
+                color: '#222222',
+                weight: 'bold',
+                flex: 1,
+                wrap: false
               }
             ]
           },
