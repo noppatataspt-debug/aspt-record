@@ -1,6 +1,6 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.6 - Layout 3 columns + %DF banner ด้านล่าง
+// v2.7 - ปรับ layout ส่วนข้อมูลเป็น 2 แถวกระชับ + Label เล็ก
 // ============================================================
 
 const MC_TARGETS = {
@@ -198,7 +198,6 @@ function getDfStatus(dfPercent, target) {
   }
 }
 
-// กล่องตัวเลขสรุป (3 columns) - ขนาดเล็กลงให้พอดี
 function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
   return {
     type: 'box',
@@ -242,7 +241,6 @@ function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
   };
 }
 
-// แถบ %DF ยาวเต็มความกว้าง พร้อม Target และสถานะ
 function dfBanner(dfPercent, target, hasTarget, status) {
   const subText = hasTarget
     ? `Target ${target}% • ${status.label}`
@@ -256,7 +254,6 @@ function dfBanner(dfPercent, target, hasTarget, status) {
     paddingAll: '14px',
     margin: 'sm',
     contents: [
-      // แถวบน: Label "%DF" + ตัวเลขใหญ่
       {
         type: 'box',
         layout: 'horizontal',
@@ -282,7 +279,6 @@ function dfBanner(dfPercent, target, hasTarget, status) {
           }
         ]
       },
-      // แถวล่าง: Target และ status (เล็ก)
       {
         type: 'text',
         text: subText,
@@ -364,7 +360,7 @@ function buildFlexMessage(s) {
     });
   }
 
-  // 3 กล่องเรียงแนวนอน: งานดี | Finish Good | ของเสีย
+  // 3 columns: งานดี | Finish Good | ของเสีย
   const metrics3Col = {
     type: 'box',
     layout: 'horizontal',
@@ -376,7 +372,6 @@ function buildFlexMessage(s) {
     ]
   };
 
-  // %DF banner ยาวเต็มความกว้าง
   const dfPercentBanner = dfBanner(s.dfPercent, s.target, s.hasTarget, status);
 
   return {
@@ -414,63 +409,95 @@ function buildFlexMessage(s) {
         spacing: 'md',
         paddingAll: '16px',
         contents: [
+          // ─────────────────────────────────────
+          // ข้อมูลทั่วไป (Layout B2 ใหม่)
+          // แถว 1: ฉาก • VB
+          //         27/04/2026 • กะเช้า
+          // แถว 2: พนักงาน: ดารารัตน์
+          //         สินค้า: test
+          // ─────────────────────────────────────
           {
             type: 'box',
             layout: 'vertical',
+            spacing: 'xs',
             contents: [
-              { type: 'text', text: 'แผนก / เครื่อง', size: 'xs', color: '#888888' },
+              // ชื่อแผนก • เครื่อง (เด่น)
               {
                 type: 'text',
                 text: `${s.dept} • ${s.machine}`,
-                size: 'sm',
+                size: 'lg',
                 weight: 'bold',
-                wrap: true,
-                margin: 'xs'
+                color: '#111111',
+                wrap: true
+              },
+              // วันที่ • กะ
+              {
+                type: 'text',
+                text: `${dateFormatted} • กะ${s.shift}`,
+                size: 'sm',
+                color: '#666666'
               }
             ]
           },
-          {
-            type: 'box',
-            layout: 'horizontal',
-            contents: [
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 1,
-                contents: [
-                  { type: 'text', text: 'วันที่', size: 'xs', color: '#888888' },
-                  { type: 'text', text: dateFormatted, size: 'xs', margin: 'xs' }
-                ]
-              },
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 1,
-                contents: [
-                  { type: 'text', text: 'กะ', size: 'xs', color: '#888888' },
-                  { type: 'text', text: String(s.shift), size: 'xs', margin: 'xs' }
-                ]
-              },
-              {
-                type: 'box',
-                layout: 'vertical',
-                flex: 2,
-                contents: [
-                  { type: 'text', text: 'พนักงาน', size: 'xs', color: '#888888' },
-                  { type: 'text', text: String(s.staff), size: 'xs', margin: 'xs', wrap: true }
-                ]
-              }
-            ]
-          },
+          // เว้นช่องว่างเล็กน้อย
           {
             type: 'box',
             layout: 'vertical',
+            spacing: 'xs',
+            margin: 'sm',
             contents: [
-              { type: 'text', text: 'สินค้า', size: 'xs', color: '#888888' },
-              { type: 'text', text: String(s.products), size: 'xs', margin: 'xs', wrap: true }
+              // พนักงาน: ดารารัตน์
+              {
+                type: 'box',
+                layout: 'baseline',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'พนักงาน: ',
+                    size: 'sm',
+                    color: '#888888',
+                    flex: 0
+                  },
+                  {
+                    type: 'text',
+                    text: String(s.staff),
+                    size: 'sm',
+                    color: '#222222',
+                    weight: 'bold',
+                    flex: 0,
+                    wrap: true
+                  }
+                ]
+              },
+              // สินค้า: test
+              {
+                type: 'box',
+                layout: 'baseline',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'สินค้า: ',
+                    size: 'sm',
+                    color: '#888888',
+                    flex: 0
+                  },
+                  {
+                    type: 'text',
+                    text: String(s.products),
+                    size: 'sm',
+                    color: '#222222',
+                    weight: 'bold',
+                    flex: 1,
+                    wrap: true
+                  }
+                ]
+              }
             ]
           },
-          { type: 'separator', margin: 'sm' },
+          { type: 'separator', margin: 'md' },
+          // ─────────────────────────────────────
+          // สรุปการผลิต
+          // ─────────────────────────────────────
           {
             type: 'text',
             text: 'สรุปการผลิต',
@@ -481,6 +508,9 @@ function buildFlexMessage(s) {
           metrics3Col,
           dfPercentBanner,
           { type: 'separator', margin: 'sm' },
+          // ─────────────────────────────────────
+          // รายละเอียดของเสีย
+          // ─────────────────────────────────────
           {
             type: 'text',
             text: 'รายละเอียดของเสีย',
