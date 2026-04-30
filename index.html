@@ -256,6 +256,25 @@ a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:v
 .search-hl{background:rgba(245,158,11,.3);color:var(--text);font-weight:700;padding:0 2px;border-radius:2px}
 [data-theme="light"] .search-hl{background:#fde68a;color:#0f172a}
 
+/* ===== Autocomplete dropdown (โหมดรายเครื่อง) ===== */
+#historyArea .mc-search-bar{position:relative}
+.mc-ac-wrap{position:relative;flex:1;min-width:0}
+.mc-ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--s1);border:1px solid var(--bdr);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-height:280px;overflow-y:auto;z-index:50;display:none}
+.mc-ac-list.show{display:block}
+.mc-ac-item{padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text);border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mc-ac-item:last-child{border-bottom:none}
+.mc-ac-item:hover,.mc-ac-item.active{background:var(--s2)}
+.mc-ac-item .ac-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mc-ac-item .ac-tag{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600;flex-shrink:0;letter-spacing:.3px}
+.mc-ac-item .ac-tag.used{background:rgba(0,201,167,.15);color:var(--accent);border:1px solid rgba(0,201,167,.3)}
+.mc-ac-item .ac-tag.other{background:rgba(125,143,175,.12);color:var(--t2);border:1px solid var(--bdr)}
+.mc-ac-item .ac-cnt{font-size:10px;color:var(--t3);font-family:"IBM Plex Mono",monospace;flex-shrink:0}
+.mc-ac-section{padding:5px 12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;background:var(--s2);position:sticky;top:0;border-bottom:1px solid var(--bdr)}
+[data-theme="light"] .mc-ac-list{background:#ffffff;border-color:#cbd5e1;box-shadow:0 8px 24px rgba(15,23,42,.12)}
+[data-theme="light"] .mc-ac-item{border-bottom-color:#f1f5f9}
+[data-theme="light"] .mc-ac-item:hover,[data-theme="light"] .mc-ac-item.active{background:#f1f5f9}
+[data-theme="light"] .mc-ac-section{background:#f8fafc;color:#94a3b8;border-bottom-color:#e2e8f0}
+
 /* ===== Machine 15-day Summary Pills ===== */
 .mc-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
 .mc-stat-box{background:var(--s2);border:1px solid var(--bdr);border-radius:8px;padding:10px 8px;text-align:center}
@@ -687,7 +706,10 @@ a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:v
       </div>
       <div class="mc-search-bar">
         <span class="ico">🔍</span>
-        <input type="text" id="mcSearchProduct" placeholder="ค้นหาชื่อสินค้า (พิมพ์บางส่วนได้)" autocomplete="off">
+        <div class="mc-ac-wrap">
+          <input type="text" id="mcSearchProduct" placeholder="ค้นหาชื่อสินค้า (พิมพ์บางส่วนได้)" autocomplete="off">
+          <div class="mc-ac-list" id="mcSearchAcList"></div>
+        </div>
         <button class="clear-btn" id="mcSearchClear" title="ล้างคำค้นหา">✕ ล้าง</button>
       </div>
       <div class="date-bar">
@@ -2393,6 +2415,7 @@ function setupHistoryControls(){
   // ===== Product search input =====
   const mcSearchInp = document.getElementById('mcSearchProduct');
   const mcSearchClear = document.getElementById('mcSearchClear');
+  const mcAcList = document.getElementById('mcSearchAcList');
   if (mcSearchInp) {
     // ใช้ debounce 200ms เพื่อไม่ให้ render รัวเกินไปขณะพิมพ์
     let searchTimer = null;
@@ -2401,6 +2424,9 @@ function setupHistoryControls(){
       const v = mcSearchInp.value.trim();
       // toggle ปุ่มล้าง
       if (mcSearchClear) mcSearchClear.classList.toggle('show', v.length > 0);
+      // แสดง autocomplete ทันที (ไม่ debounce เพราะแค่ filter list ใน memory)
+      renderMcAutocomplete(v);
+      // filter list ใหญ่ใช้ debounce
       searchTimer = setTimeout(() => {
         mcSearchQuery = v;
         // ใช้ cache ที่มีอยู่แล้ว filter ใหม่ (ไม่ต้องโหลดจาก server)
@@ -2411,18 +2437,168 @@ function setupHistoryControls(){
         }
       }, 200);
     };
+    // โชว์ autocomplete เมื่อ focus (ถ้ามี pool แล้ว)
+    mcSearchInp.onfocus = () => {
+      renderMcAutocomplete(mcSearchInp.value.trim());
+    };
+    // ซ่อน autocomplete เมื่อ blur (delay เล็กน้อยเพื่อให้ click ทัน)
+    mcSearchInp.onblur = () => {
+      setTimeout(() => {
+        if (mcAcList) mcAcList.classList.remove('show');
+      }, 200);
+    };
+    // keyboard navigation
+    mcSearchInp.onkeydown = (e) => {
+      if (!mcAcList || !mcAcList.classList.contains('show')) return;
+      const items = mcAcList.querySelectorAll('.mc-ac-item');
+      if (items.length === 0) return;
+      let activeIdx = -1;
+      items.forEach((it, i) => { if (it.classList.contains('active')) activeIdx = i; });
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = (activeIdx + 1) % items.length;
+        items.forEach(it => it.classList.remove('active'));
+        items[next].classList.add('active');
+        items[next].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+        items.forEach(it => it.classList.remove('active'));
+        items[prev].classList.add('active');
+        items[prev].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        if (activeIdx >= 0) {
+          e.preventDefault();
+          const name = items[activeIdx].dataset.name;
+          if (name) selectMcAcItem(name);
+        }
+      } else if (e.key === 'Escape') {
+        mcAcList.classList.remove('show');
+      }
+    };
   }
   if (mcSearchClear) {
     mcSearchClear.onclick = () => {
       if (mcSearchInp) mcSearchInp.value = '';
       mcSearchQuery = '';
       mcSearchClear.classList.remove('show');
+      if (mcAcList) mcAcList.classList.remove('show');
       if (mcCachedRecords && mcCachedRange) {
         renderMachineHistory(mcCachedRecords, mcCachedRange.start, mcCachedRange.end);
       } else {
         loadMachineHistory();
       }
     };
+  }
+}
+
+// ============================================================
+// Autocomplete สำหรับช่องค้นหาสินค้า
+// แสดง 2 กลุ่ม: (1) สินค้าที่เครื่องนี้เคยใช้ใน 15 วัน  (2) สินค้าอื่นๆ ในระบบ
+// ============================================================
+function renderMcAutocomplete(query){
+  const acList = document.getElementById('mcSearchAcList');
+  if (!acList) return;
+  
+  const q = (query || '').trim().toLowerCase();
+  const usedNames = new Set(mcAcUsedProducts.map(p => p.name));
+  
+  // Group 1: สินค้าที่เครื่องนี้เคยใช้
+  let usedMatches = mcAcUsedProducts;
+  if (q.length > 0) {
+    usedMatches = mcAcUsedProducts.filter(p => p.name.toLowerCase().includes(q));
+    // จัดเรียง: prefix match ก่อน, ตามด้วย substring match
+    usedMatches.sort((a, b) => {
+      const aPrefix = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      const bPrefix = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+      return b.count - a.count || a.name.localeCompare(b.name);
+    });
+  }
+  
+  // Group 2: สินค้าอื่นๆ ในระบบ (ไม่อยู่ใน used) — ใช้กรณีพนักงานบันทึกผิดสินค้า
+  let otherMatches = [];
+  if (q.length > 0) {
+    const allProducts = (META.products || []).map(p => p.name).filter(Boolean);
+    otherMatches = allProducts
+      .filter(name => !usedNames.has(name) && name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aPrefix = a.toLowerCase().startsWith(q) ? 0 : 1;
+        const bPrefix = b.toLowerCase().startsWith(q) ? 0 : 1;
+        if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+        return a.localeCompare(b);
+      });
+  }
+  
+  // Limit เพื่อให้ list ไม่ยาวเกินไป
+  const MAX_USED = 12;
+  const MAX_OTHER = 8;
+  usedMatches = usedMatches.slice(0, MAX_USED);
+  otherMatches = otherMatches.slice(0, MAX_OTHER);
+  
+  if (usedMatches.length === 0 && otherMatches.length === 0) {
+    acList.classList.remove('show');
+    acList.innerHTML = '';
+    return;
+  }
+  
+  let html = '';
+  if (usedMatches.length > 0) {
+    html += '<div class="mc-ac-section">เคยใช้กับเครื่องนี้ (' + usedMatches.length + ')</div>';
+    usedMatches.forEach(p => {
+      html += '<div class="mc-ac-item" data-name="' + histEscape(p.name) + '" onmousedown="selectMcAcItem(\'' + histEscape(p.name).replace(/'/g, "\\'") + '\')">' +
+        '<span class="ac-name">' + highlightAcMatch(p.name, q) + '</span>' +
+        '<span class="ac-tag used">✓ เคยใช้</span>' +
+        '<span class="ac-cnt">' + p.count + 'x</span>' +
+      '</div>';
+    });
+  }
+  if (otherMatches.length > 0) {
+    html += '<div class="mc-ac-section">สินค้าอื่นๆ ในระบบ (' + otherMatches.length + ')</div>';
+    otherMatches.forEach(name => {
+      html += '<div class="mc-ac-item" data-name="' + histEscape(name) + '" onmousedown="selectMcAcItem(\'' + histEscape(name).replace(/'/g, "\\'") + '\')">' +
+        '<span class="ac-name">' + highlightAcMatch(name, q) + '</span>' +
+        '<span class="ac-tag other">ในระบบ</span>' +
+      '</div>';
+    });
+  }
+  
+  acList.innerHTML = html;
+  acList.classList.add('show');
+}
+
+function highlightAcMatch(name, q){
+  const escaped = histEscape(name);
+  if (!q) return escaped;
+  const qe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    const re = new RegExp('(' + qe + ')', 'gi');
+    return escaped.replace(re, '<span class="search-hl">$1</span>');
+  } catch (e) {
+    return escaped;
+  }
+}
+
+// เลือก item จาก autocomplete dropdown
+function selectMcAcItem(name){
+  const inp = document.getElementById('mcSearchProduct');
+  const acList = document.getElementById('mcSearchAcList');
+  const clearBtn = document.getElementById('mcSearchClear');
+  if (!inp) return;
+  
+  // unescape HTML entities (เพราะ data-name ถูก escape มาแล้ว)
+  const unescape = (s) => String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  const finalName = unescape(name);
+  
+  inp.value = finalName;
+  mcSearchQuery = finalName;
+  if (clearBtn) clearBtn.classList.add('show');
+  if (acList) acList.classList.remove('show');
+  
+  if (mcCachedRecords && mcCachedRange) {
+    renderMachineHistory(mcCachedRecords, mcCachedRange.start, mcCachedRange.end);
+  } else {
+    loadMachineHistory();
   }
 }
 
@@ -2684,6 +2860,7 @@ function renderHistoryCard(g){
 
 // ============================================================
 // โหมดรายเครื่อง 15 วัน — Loader
+// (v9.1: นับเฉพาะ 15 วันล่าสุดที่มีบันทึกจริง — วันหยุด/วันที่เครื่องไม่เดิน ไม่นับเป็นขาด)
 // ============================================================
 async function loadMachineHistory(){
   const list = document.getElementById('historyList');
@@ -2702,31 +2879,78 @@ async function loadMachineHistory(){
     if (inp) inp.value = mcEndDateSel;
   }
   
-  // คำนวณช่วงวันที่ — ย้อนหลัง MC_HISTORY_DAYS วัน นับจาก mcEndDateSel
+  // ดึงข้อมูลย้อนหลังกว้างพอ (60 วัน) แล้วค่อยเลือก 15 วันล่าสุดที่มีบันทึก
+  // เพื่อข้ามวันหยุด/วันที่เครื่องไม่เดิน
+  const SCAN_DAYS = 60;
   const endD = new Date(mcEndDateSel + 'T00:00:00');
-  const startD = new Date(endD);
-  startD.setDate(startD.getDate() - (MC_HISTORY_DAYS - 1));
-  const startStr = startD.toISOString().split('T')[0];
+  const scanStartD = new Date(endD);
+  scanStartD.setDate(scanStartD.getDate() - (SCAN_DAYS - 1));
+  const scanStartStr = scanStartD.toISOString().split('T')[0];
   const endStr = mcEndDateSel;
   
-  list.innerHTML = '<div class="hist-loading"><span class="spinner"></span> กำลังโหลดข้อมูล ' + MC_HISTORY_DAYS + ' วัน...</div>';
+  list.innerHTML = '<div class="hist-loading"><span class="spinner"></span> กำลังโหลดข้อมูล...</div>';
   summary.innerHTML = '';
   
   try {
-    const records = await sbGet(
+    const allRecords = await sbGet(
       '/production_records?select=record_date,shift,dept_name,machine_name,staff_name,product_name,type_name,key_type,qty,created_at,submission_id' +
       '&machine_name=eq.' + encodeURIComponent(mcFilterMachineSel) +
-      '&record_date=gte.' + startStr +
+      '&record_date=gte.' + scanStartStr +
       '&record_date=lte.' + endStr +
-      '&order=record_date.desc,created_at.asc&limit=2000'
+      '&order=record_date.desc,created_at.asc&limit=5000'
     );
+    
+    // หา 15 วันล่าสุดที่มีบันทึก
+    const datesWithData = Array.from(new Set((allRecords || []).map(r => r.record_date)))
+      .sort()                                  // เก่า -> ใหม่
+      .reverse()                               // ใหม่ -> เก่า
+      .slice(0, MC_HISTORY_DAYS);              // เอาแค่ 15 วันแรก (ใหม่สุด)
+    
+    let effectiveStartStr, effectiveEndStr, records;
+    if (datesWithData.length > 0) {
+      effectiveStartStr = datesWithData[datesWithData.length - 1];   // วันเก่าสุด
+      effectiveEndStr = datesWithData[0];                            // วันใหม่สุด
+      const dateSet = new Set(datesWithData);
+      records = (allRecords || []).filter(r => dateSet.has(r.record_date));
+    } else {
+      // ไม่มีบันทึกเลยใน 60 วัน
+      effectiveStartStr = scanStartStr;
+      effectiveEndStr = endStr;
+      records = [];
+    }
+    
     // cache ไว้ให้ search filter ใช้ซ้ำได้โดยไม่ต้องโหลดใหม่
-    mcCachedRecords = records || [];
-    mcCachedRange = { start: startStr, end: endStr };
-    renderMachineHistory(mcCachedRecords, startStr, endStr);
+    mcCachedRecords = records;
+    mcCachedRange = { start: effectiveStartStr, end: effectiveEndStr };
+    
+    // build autocomplete pool ของเครื่องนี้
+    rebuildMcAcPool(records);
+    
+    renderMachineHistory(records, effectiveStartStr, effectiveEndStr);
   } catch (e) {
     list.innerHTML = '<div class="hist-empty" style="color:var(--danger)">โหลดไม่ได้: ' + (e.message || e) + '</div>';
   }
+}
+
+// ============================================================
+// สร้าง pool สำหรับ autocomplete จาก records ของเครื่องนี้
+// เก็บ: { name, count } เรียงตาม count desc
+// ============================================================
+let mcAcUsedProducts = [];     // [{name, count}] - สินค้าที่เครื่องนี้เคยใช้ใน 15 วัน
+function rebuildMcAcPool(records){
+  const seenSubs = {};
+  const counter = {};
+  records.forEach(r => {
+    const subKey = r.submission_id || ('leg|' + r.machine_name + '|' + r.record_date + '|' + r.shift + '|' + r.staff_name + '|' + r.product_name);
+    if (seenSubs[subKey]) return;     // นับ submission ละครั้งเท่านั้น
+    seenSubs[subKey] = true;
+    const p = (r.product_name || '').trim();
+    if (!p) return;
+    counter[p] = (counter[p] || 0) + 1;
+  });
+  mcAcUsedProducts = Object.entries(counter)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 // ============================================================
@@ -2836,26 +3060,17 @@ function renderMachineHistory(records, startStr, endStr){
     });
   });
   
-  // ===== Build sequential list of all 15 days (รวมวันที่ไม่มีบันทึก) =====
-  const allDays = [];
-  {
-    const start = new Date(startStr + 'T00:00:00');
-    const end = new Date(endStr + 'T00:00:00');
-    const cur = new Date(end);
-    while (cur >= start) {
-      allDays.push(cur.toISOString().split('T')[0]);
-      cur.setDate(cur.getDate() - 1);
-    }
-  }
-  // allDays เรียง newest -> oldest แล้ว
+  // ===== ใช้เฉพาะวันที่มีบันทึก (เรียง ใหม่ -> เก่า) =====
+  // หมายเหตุ: loader คัดให้แล้วว่าเป็น 15 วันล่าสุดที่มีบันทึก
+  // ถ้า user search อยู่ อาจจะเหลือน้อยกว่านั้นก็ได้
+  const allDays = Object.keys(byDate).sort().reverse();
   
   // ===== คำนวณ summary =====
   const totalOut = groupList.reduce((s,g) => s + g._outTotal, 0);
   const totalFg = groupList.reduce((s,g) => s + g._fgTotal, 0);
   const totalDf = groupList.reduce((s,g) => s + g._dfTotal, 0);
   const avgPct = totalOut > 0 ? (totalDf / totalOut * 100) : 0;
-  const daysWithRecords = Object.keys(byDate).length;
-  const missingDays = allDays.filter(d => !byDate[d]);
+  const daysWithRecords = allDays.length;     // ตอนนี้ allDays = วันที่มีบันทึกล่ะ
   
   // ===== คำนวณ "anomaly threshold" =====
   // ใช้ค่าเฉลี่ย + 1.5 เท่า เป็น threshold (และอย่างน้อย 1.5 เท่าของ avgPct, ขั้นต่ำ 3%)
@@ -2891,22 +3106,14 @@ function renderMachineHistory(records, startStr, endStr){
   // ===== Render summary stat grid =====
   const pctCls = avgPct < 3 ? 'ok' : avgPct < 6 ? 'warn' : 'bad';
   summaryHtml += '<div class="mc-stat-grid">' +
-    '<div class="mc-stat-box"><div class="lbl">บันทึก</div><div class="val">' + groupList.length + '</div><div class="sub">' + daysWithRecords + '/' + allDays.length + ' วัน</div></div>' +
+    '<div class="mc-stat-box"><div class="lbl">บันทึก</div><div class="val">' + groupList.length + '</div><div class="sub">' + daysWithRecords + ' วันที่มีบันทึก</div></div>' +
     '<div class="mc-stat-box"><div class="lbl">Output รวม</div><div class="val ok">' + totalOut.toLocaleString() + '</div></div>' +
     '<div class="mc-stat-box"><div class="lbl">DF รวม</div><div class="val bad">' + totalDf.toLocaleString() + '</div></div>' +
     '<div class="mc-stat-box"><div class="lbl">%Defect เฉลี่ย</div><div class="val ' + pctCls + '">' + (totalOut > 0 ? avgPct.toFixed(2) + '%' : '—') + '</div></div>' +
   '</div>';
   
-  // ===== แจ้งวันที่ขาด =====
-  if (missingDays.length > 0) {
-    const missLbl = missingDays.length <= 8
-      ? missingDays.map(d => fmtThai(d)).join(', ')
-      : missingDays.slice(0, 8).map(d => fmtThai(d)).join(', ') + ' ... +อีก ' + (missingDays.length - 8) + ' วัน';
-    summaryHtml += '<div class="hist-pill warn">' +
-      '<span>⚠️ <strong>ขาดบันทึก ' + missingDays.length + ' วัน</strong></span>' +
-      '<span class="miss">' + missLbl + '</span>' +
-    '</div>';
-  }
+  // (ตัด pill "ขาดบันทึก" ออกแล้ว — เพราะตอนนี้ระบบจะหยิบเฉพาะ 15 วันล่าสุดที่มีบันทึก
+  //  วันที่เครื่องหยุดเดิน/วันหยุด จะถูกข้ามอัตโนมัติ ไม่นับว่าขาด)
   
   // ===== แจ้งวันที่ %defect ผิดปกติ =====
   if (anomalyThreshold !== Infinity) {
@@ -2933,9 +3140,9 @@ function renderMachineHistory(records, startStr, endStr){
   // ===== Render list =====
   if (groupList.length === 0) {
     if (mcSearchQuery && mcSearchQuery.length > 0) {
-      list.innerHTML = '<div class="hist-empty">🔍 ไม่พบสินค้า "<strong>' + histEscape(mcSearchQuery) + '</strong>" ของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ในช่วง ' + MC_HISTORY_DAYS + ' วันนี้<small>ลองพิมพ์คำอื่น หรือกดปุ่ม "✕ ล้าง" เพื่อดูทั้งหมด</small></div>';
+      list.innerHTML = '<div class="hist-empty">🔍 ไม่พบสินค้า "<strong>' + histEscape(mcSearchQuery) + '</strong>" ของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ใน 15 วันล่าสุดที่มีบันทึก<small>ลองพิมพ์คำอื่น หรือกดปุ่ม "✕ ล้าง" เพื่อดูทั้งหมด</small></div>';
     } else {
-      list.innerHTML = '<div class="hist-empty">📭 ไม่พบบันทึกของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ในช่วง ' + MC_HISTORY_DAYS + ' วันนี้<small>ลองเปลี่ยนวันที่ หรือเลือกเครื่องอื่น</small></div>';
+      list.innerHTML = '<div class="hist-empty">📭 ไม่พบบันทึกของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ในช่วง 60 วันที่ผ่านมา<small>ลองเปลี่ยนวันที่ หรือเลือกเครื่องอื่น</small></div>';
     }
     return;
   }
@@ -2946,6 +3153,7 @@ function renderMachineHistory(records, startStr, endStr){
   let html = '';
   allDays.forEach(dateKey => {
     const grp = byDate[dateKey];
+    if (!grp) return;       // safeguard
     const dayLabel = fmtThai(dateKey);
     let relTag = '';
     if (dateKey === todayStr) relTag = '<span class="day-num">(วันนี้)</span>';
@@ -2962,35 +3170,26 @@ function renderMachineHistory(records, startStr, endStr){
       wkLbl = dObj.toLocaleDateString('th-TH', { weekday: 'short' });
     } catch (e) {}
     
-    if (!grp) {
-      // วันที่ขาดบันทึก
-      html += '<div class="mc-day-hdr">' +
-        '<span class="day-label">📅 ' + dayLabel + (wkLbl ? ' <span class="day-num">(' + wkLbl + ')</span>' : '') + ' ' + relTag + '</span>' +
-        '<span class="day-pct muted">— ไม่มีบันทึก —</span>' +
-      '</div>';
-      html += '<div class="mc-missing-day">⚠️ ไม่มีบันทึกในวันนี้</div>';
-    } else {
-      // คำนวณ %defect รวมของวัน
-      const dOut = grp.reduce((s,g) => s + g._outTotal, 0);
-      const dDf = grp.reduce((s,g) => s + g._dfTotal, 0);
-      const dPct = dOut > 0 ? (dDf / dOut * 100) : 0;
-      const dPctCls = dOut === 0 ? 'muted' : dPct < 3 ? 'ok' : dPct < 6 ? 'warn' : 'bad';
-      const dPctLbl = dOut > 0 ? dPct.toFixed(2) + '%' : '—';
-      
-      html += '<div class="mc-day-hdr">' +
-        '<span class="day-label">📅 ' + dayLabel + (wkLbl ? ' <span class="day-num">(' + wkLbl + ')</span>' : '') + ' ' + relTag + '</span>' +
-        '<span class="day-pct ' + dPctCls + '">' + dPctLbl + ' · ' + grp.length + (grp.length > 1 ? ' บันทึก' : ' บันทึก') + '</span>' +
-      '</div>';
-      
-      grp.forEach(g => {
-        const isAnomaly = (anomalyThreshold !== Infinity) && g._outTotal > 0 && g._pct > anomalyThreshold;
-        const isDup = dupeDayKeys.has(g.record_date) && grp.length > 1;
-        // ใส่ flag ใน g ชั่วคราว ให้ renderHistoryCard ใช้ได้
-        g._anomaly = isAnomaly;
-        g._dupForce = isDup;
-        html += renderHistoryCard(g);
-      });
-    }
+    // คำนวณ %defect รวมของวัน
+    const dOut = grp.reduce((s,g) => s + g._outTotal, 0);
+    const dDf = grp.reduce((s,g) => s + g._dfTotal, 0);
+    const dPct = dOut > 0 ? (dDf / dOut * 100) : 0;
+    const dPctCls = dOut === 0 ? 'muted' : dPct < 3 ? 'ok' : dPct < 6 ? 'warn' : 'bad';
+    const dPctLbl = dOut > 0 ? dPct.toFixed(2) + '%' : '—';
+    
+    html += '<div class="mc-day-hdr">' +
+      '<span class="day-label">📅 ' + dayLabel + (wkLbl ? ' <span class="day-num">(' + wkLbl + ')</span>' : '') + ' ' + relTag + '</span>' +
+      '<span class="day-pct ' + dPctCls + '">' + dPctLbl + ' · ' + grp.length + ' บันทึก</span>' +
+    '</div>';
+    
+    grp.forEach(g => {
+      const isAnomaly = (anomalyThreshold !== Infinity) && g._outTotal > 0 && g._pct > anomalyThreshold;
+      const isDup = dupeDayKeys.has(g.record_date) && grp.length > 1;
+      // ใส่ flag ใน g ชั่วคราว ให้ renderHistoryCard ใช้ได้
+      g._anomaly = isAnomaly;
+      g._dupForce = isDup;
+      html += renderHistoryCard(g);
+    });
   });
   
   list.innerHTML = html;
