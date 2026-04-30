@@ -222,6 +222,75 @@ a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:v
 #historyArea .date-nav-btn:hover{color:var(--text);border-color:var(--t3)}
 #historyArea .today-btn{padding:6px 10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:11px;cursor:pointer;font-weight:600}
 
+/* ===== History Mode Toggle (รายวัน / รายเครื่อง 15 วัน) ===== */
+.hist-mode-tabs{display:flex;gap:4px;padding:3px;background:var(--s2);border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px}
+.hist-mode-tab{flex:1;padding:9px 12px;background:transparent;color:var(--t2);border:none;border-radius:6px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.hist-mode-tab.active{background:var(--blue);color:#fff;font-weight:700}
+.hist-mode-tab:hover:not(.active){color:var(--text)}
+[data-theme="light"] .hist-mode-tabs{background:#f1f5f9;border-color:#e2e8f0}
+[data-theme="light"] .hist-mode-tab{color:#475569}
+[data-theme="light"] .hist-mode-tab.active{background:var(--blue) !important;color:#fff !important}
+
+/* ===== Machine Filter Bar ===== */
+#historyArea .mc-filter-bar{background:var(--s2);padding:10px 12px;border-radius:8px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#historyArea .mc-filter-bar .lbl{font-size:12px;color:var(--t2);font-weight:600;flex-shrink:0}
+#historyArea .mc-filter-bar select{flex:1;min-width:160px;padding:8px 12px;background:var(--s1);color:var(--text);border:1px solid var(--bdr);border-radius:6px;font-size:13px;font-family:inherit;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237d8faf' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+#historyArea .mc-filter-bar select:focus{outline:none;border-color:var(--blue)}
+[data-theme="light"] #historyArea .mc-filter-bar{background:#ffffff;border:1px solid #e2e8f0}
+[data-theme="light"] #historyArea .mc-filter-bar select{background:#ffffff;color:#0f172a;border-color:#cbd5e1}
+
+/* ===== Product Search Box (โหมดรายเครื่อง) ===== */
+#historyArea .mc-search-bar{background:var(--s2);padding:8px 12px;border-radius:8px;margin-bottom:10px;display:flex;gap:8px;align-items:center}
+#historyArea .mc-search-bar .ico{font-size:14px;color:var(--t2);flex-shrink:0}
+#historyArea .mc-search-bar input{flex:1;padding:8px 12px;background:var(--s1);color:var(--text);border:1px solid var(--bdr);border-radius:6px;font-size:13px;font-family:inherit;min-width:0}
+#historyArea .mc-search-bar input:focus{outline:none;border-color:var(--blue)}
+#historyArea .mc-search-bar input::placeholder{color:var(--t3)}
+#historyArea .mc-search-bar .clear-btn{padding:6px 10px;background:transparent;border:1px solid var(--bdr);border-radius:6px;color:var(--t2);cursor:pointer;font-family:inherit;font-size:12px;flex-shrink:0;display:none}
+#historyArea .mc-search-bar .clear-btn.show{display:inline-block}
+#historyArea .mc-search-bar .clear-btn:hover{color:var(--text);border-color:var(--t3)}
+#historyArea .mc-search-bar .hint{font-size:11px;color:var(--t3);flex-shrink:0}
+[data-theme="light"] #historyArea .mc-search-bar{background:#ffffff;border:1px solid #e2e8f0}
+[data-theme="light"] #historyArea .mc-search-bar input{background:#ffffff;color:#0f172a;border-color:#cbd5e1}
+
+/* highlight ผลการค้นหา */
+.search-hl{background:rgba(245,158,11,.3);color:var(--text);font-weight:700;padding:0 2px;border-radius:2px}
+[data-theme="light"] .search-hl{background:#fde68a;color:#0f172a}
+
+/* ===== Machine 15-day Summary Pills ===== */
+.mc-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.mc-stat-box{background:var(--s2);border:1px solid var(--bdr);border-radius:8px;padding:10px 8px;text-align:center}
+.mc-stat-box .lbl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
+.mc-stat-box .val{font-size:18px;font-weight:800;font-family:"IBM Plex Mono",monospace;color:var(--text)}
+.mc-stat-box .val.ok{color:var(--accent)}
+.mc-stat-box .val.warn{color:var(--warn)}
+.mc-stat-box .val.bad{color:var(--danger)}
+.mc-stat-box .val.muted{color:var(--t3)}
+.mc-stat-box .sub{font-size:10px;color:var(--t3);margin-top:2px}
+[data-theme="light"] .mc-stat-box{background:#ffffff;border-color:#e2e8f0}
+@media(max-width:520px){
+  .mc-stat-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ===== Day group header (โหมดรายเครื่อง) ===== */
+.mc-day-hdr{padding:8px 12px;margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--text);border-bottom:2px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mc-day-hdr:first-child{margin-top:4px}
+.mc-day-hdr .day-label{display:flex;align-items:center;gap:8px}
+.mc-day-hdr .day-num{font-family:"IBM Plex Mono",monospace;color:var(--t2);font-size:11px;font-weight:500}
+.mc-day-hdr .day-pct{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:700}
+.mc-day-hdr .day-pct.ok{color:var(--accent)}
+.mc-day-hdr .day-pct.warn{color:var(--warn)}
+.mc-day-hdr .day-pct.bad{color:var(--danger)}
+.mc-day-hdr .day-pct.muted{color:var(--t3);font-weight:500;font-style:italic}
+
+/* ===== Anomaly highlight (%Defect สูงผิดปกติเทียบกับค่าเฉลี่ย) ===== */
+.hist-card.anomaly{box-shadow:inset 0 0 0 2px var(--warn);background:rgba(245,158,11,.06)}
+.hist-card.anomaly .hist-title::after{content:" ⚠️";font-size:13px}
+[data-theme="light"] .hist-card.anomaly{background:rgba(245,158,11,.1)}
+
+/* ===== Missing-day card (วันที่ไม่มีบันทึก) ===== */
+.mc-missing-day{background:repeating-linear-gradient(45deg,var(--s2),var(--s2) 6px,var(--s1) 6px,var(--s1) 12px);border:1px dashed var(--bdr);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px;color:var(--t3);text-align:center;font-style:italic}
+[data-theme="light"] .mc-missing-day{background:repeating-linear-gradient(45deg,#f8fafc,#f8fafc 6px,#ffffff 6px,#ffffff 12px);border-color:#cbd5e1;color:#94a3b8}
+
 .hist-pill{background:rgba(78,159,255,.08);border:1px solid rgba(78,159,255,.3);padding:12px 16px;border-radius:8px;margin-bottom:12px;font-size:14px;font-weight:500;color:var(--text);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
 .hist-pill.warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.3)}
 .hist-pill strong{color:var(--blue)}
@@ -593,12 +662,42 @@ a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:v
   <div id="loadingArea" class="loading"><span class="spinner"></span>กำลังโหลดข้อมูลจากฐานข้อมูล...</div>
 
   <div id="historyArea" style="display:none">
-    <div class="date-bar">
-      <button class="date-nav-btn" id="dayPrev" title="วันก่อนหน้า">◀</button>
-      <input type="date" id="historyDate">
-      <button class="date-nav-btn" id="dayNext" title="วันถัดไป">▶</button>
-      <button class="today-btn" id="todayBtn" title="วันนี้">วันนี้</button>
+    <div class="hist-mode-tabs" id="histModeTabs">
+      <button class="hist-mode-tab active" data-mode="day" onclick="switchHistMode('day')">🗓️ รายวัน</button>
+      <button class="hist-mode-tab" data-mode="machine" onclick="switchHistMode('machine')">🔧 รายเครื่อง 15 วัน</button>
     </div>
+    
+    <!-- โหมดรายวัน (เดิม) -->
+    <div id="histModeDay">
+      <div class="date-bar">
+        <button class="date-nav-btn" id="dayPrev" title="วันก่อนหน้า">◀</button>
+        <input type="date" id="historyDate">
+        <button class="date-nav-btn" id="dayNext" title="วันถัดไป">▶</button>
+        <button class="today-btn" id="todayBtn" title="วันนี้">วันนี้</button>
+      </div>
+    </div>
+    
+    <!-- โหมดรายเครื่อง 15 วัน (ใหม่) -->
+    <div id="histModeMachine" style="display:none">
+      <div class="mc-filter-bar">
+        <span class="lbl">แผนก</span>
+        <select id="mcFilterDept"></select>
+        <span class="lbl">เครื่อง</span>
+        <select id="mcFilterMachine"></select>
+      </div>
+      <div class="mc-search-bar">
+        <span class="ico">🔍</span>
+        <input type="text" id="mcSearchProduct" placeholder="ค้นหาชื่อสินค้า (พิมพ์บางส่วนได้)" autocomplete="off">
+        <button class="clear-btn" id="mcSearchClear" title="ล้างคำค้นหา">✕ ล้าง</button>
+      </div>
+      <div class="date-bar">
+        <button class="date-nav-btn" id="mcDayPrev" title="ขยับช่วงไป 1 วัน (ย้อนหลัง)">◀</button>
+        <input type="date" id="mcEndDate">
+        <button class="date-nav-btn" id="mcDayNext" title="ขยับช่วงไป 1 วัน (ถัดไป)">▶</button>
+        <button class="today-btn" id="mcTodayBtn" title="ถึงวันนี้">วันนี้</button>
+      </div>
+    </div>
+    
     <div id="historySummary"></div>
     <div id="historyList"></div>
   </div>
@@ -2061,8 +2160,17 @@ async function showHistory() {
 
 // ============================================================
 // History Page (ดูบันทึก) — v8 feature
+// v9: เพิ่มโหมด "รายเครื่อง 15 วัน" สำหรับ filter เครื่องและดูย้อนหลัง
 // ============================================================
 let historyDateSel = null;
+let histMode = 'day';                  // 'day' | 'machine'
+let mcFilterDeptSel = null;            // แผนกที่ filter ในโหมดรายเครื่อง
+let mcFilterMachineSel = null;         // เครื่องที่ filter ในโหมดรายเครื่อง
+let mcEndDateSel = null;               // วันที่สิ้นสุด (เริ่มนับย้อน 15 วัน)
+let mcSearchQuery = '';                // คำค้นหาชื่อสินค้า (โหมดรายเครื่อง)
+let mcCachedRecords = null;            // cache ของ records ที่โหลดล่าสุด (เพื่อ filter โดยไม่ต้องโหลดใหม่)
+let mcCachedRange = null;              // {start, end} ของ cache ปัจจุบัน
+const MC_HISTORY_DAYS = 15;            // จำนวนวันย้อนหลัง
 
 function switchPage(page){
   document.querySelectorAll('.page-tab').forEach(b => {
@@ -2087,7 +2195,13 @@ function switchPage(page){
       historyDateSel = new Date().toISOString().split('T')[0];
       document.getElementById('historyDate').value = historyDateSel;
     }
-    loadHistory();
+    
+    // โหลดตาม mode ที่เลือกอยู่
+    if (histMode === 'machine') {
+      loadMachineHistory();
+    } else {
+      loadHistory();
+    }
   } else {
     // page === 'record' — คืนสภาพเดิม
     if (historyArea) historyArea.style.display = 'none';
@@ -2098,6 +2212,85 @@ function switchPage(page){
     if (appArea) appArea.style.display = window._prevAppDisplay || 'block';
     if (reviewArea) reviewArea.style.display = window._prevReviewDisplay || 'none';
   }
+}
+
+// ============================================================
+// สลับโหมดในหน้า "ดูบันทึก": รายวัน <-> รายเครื่อง 15 วัน
+// ============================================================
+function switchHistMode(mode){
+  histMode = mode;
+  document.querySelectorAll('.hist-mode-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  const dayBox = document.getElementById('histModeDay');
+  const mcBox = document.getElementById('histModeMachine');
+  const summary = document.getElementById('historySummary');
+  const list = document.getElementById('historyList');
+  
+  // เคลียร์ของเก่าก่อน เพื่อไม่ให้สับสน
+  if (summary) summary.innerHTML = '';
+  if (list) list.innerHTML = '';
+  
+  if (mode === 'machine') {
+    if (dayBox) dayBox.style.display = 'none';
+    if (mcBox) mcBox.style.display = '';
+    
+    // ตั้งค่า default ครั้งแรกที่เข้าโหมดนี้
+    if (!mcEndDateSel) {
+      mcEndDateSel = new Date().toISOString().split('T')[0];
+      const inp = document.getElementById('mcEndDate');
+      if (inp) inp.value = mcEndDateSel;
+    }
+    populateMcFilterDept();
+    populateMcFilterMachine();
+    loadMachineHistory();
+  } else {
+    if (dayBox) dayBox.style.display = '';
+    if (mcBox) mcBox.style.display = 'none';
+    loadHistory();
+  }
+}
+
+// ============================================================
+// Populate dropdown แผนก ในโหมดรายเครื่อง
+// ============================================================
+function populateMcFilterDept(){
+  const sel = document.getElementById('mcFilterDept');
+  if (!sel) return;
+  const depts = (META.depts || []).map(d => d.name);
+  // ถ้าไม่มี dept ที่ select ไว้ -> ใช้ตัวแรก
+  if (!mcFilterDeptSel || !depts.includes(mcFilterDeptSel)) {
+    mcFilterDeptSel = depts[0] || null;
+  }
+  let html = '';
+  depts.forEach(d => {
+    html += '<option value="' + histEscape(d) + '"' + (d === mcFilterDeptSel ? ' selected' : '') + '>' + histEscape(d) + '</option>';
+  });
+  sel.innerHTML = html;
+}
+
+// ============================================================
+// Populate dropdown เครื่อง ตามแผนกที่เลือก
+// ============================================================
+function populateMcFilterMachine(){
+  const sel = document.getElementById('mcFilterMachine');
+  if (!sel) return;
+  const machinesInDept = (META.machines || [])
+    .filter(m => m.dept_name === mcFilterDeptSel)
+    .map(m => m.name);
+  // ถ้าเครื่องเดิมไม่อยู่ในแผนกนี้ -> reset เป็นตัวแรก
+  if (!mcFilterMachineSel || !machinesInDept.includes(mcFilterMachineSel)) {
+    mcFilterMachineSel = machinesInDept[0] || null;
+  }
+  let html = '';
+  if (machinesInDept.length === 0) {
+    html = '<option value="">— ไม่มีเครื่องในแผนกนี้ —</option>';
+  } else {
+    machinesInDept.forEach(m => {
+      html += '<option value="' + histEscape(m) + '"' + (m === mcFilterMachineSel ? ' selected' : '') + '>' + histEscape(m) + '</option>';
+    });
+  }
+  sel.innerHTML = html;
 }
 
 function setupHistoryControls(){
@@ -2133,6 +2326,104 @@ function setupHistoryControls(){
     dateInput.value = historyDateSel;
     loadHistory();
   };
+  
+  // ===== Machine-mode controls =====
+  const mcDeptSel = document.getElementById('mcFilterDept');
+  const mcMcSel = document.getElementById('mcFilterMachine');
+  const mcEndInp = document.getElementById('mcEndDate');
+  const mcPrev = document.getElementById('mcDayPrev');
+  const mcNext = document.getElementById('mcDayNext');
+  const mcToday = document.getElementById('mcTodayBtn');
+  
+  if (mcDeptSel) {
+    mcDeptSel.onchange = () => {
+      mcFilterDeptSel = mcDeptSel.value;
+      mcFilterMachineSel = null;            // reset เพราะเปลี่ยนแผนก
+      mcCachedRecords = null;               // เคลียร์ cache เพราะข้อมูลเก่าใช้ไม่ได้แล้ว
+      populateMcFilterMachine();
+      loadMachineHistory();
+    };
+  }
+  if (mcMcSel) {
+    mcMcSel.onchange = () => {
+      mcFilterMachineSel = mcMcSel.value;
+      mcCachedRecords = null;
+      loadMachineHistory();
+    };
+  }
+  if (mcEndInp) {
+    mcEndInp.onchange = () => {
+      mcEndDateSel = mcEndInp.value;
+      mcCachedRecords = null;
+      loadMachineHistory();
+    };
+  }
+  if (mcPrev) {
+    mcPrev.onclick = () => {
+      const d = new Date(mcEndDateSel + 'T00:00:00');
+      d.setDate(d.getDate() - 1);
+      mcEndDateSel = d.toISOString().split('T')[0];
+      mcEndInp.value = mcEndDateSel;
+      mcCachedRecords = null;
+      loadMachineHistory();
+    };
+  }
+  if (mcNext) {
+    mcNext.onclick = () => {
+      const d = new Date(mcEndDateSel + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      const next = d.toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
+      if (next > today) return;
+      mcEndDateSel = next;
+      mcEndInp.value = mcEndDateSel;
+      mcCachedRecords = null;
+      loadMachineHistory();
+    };
+  }
+  if (mcToday) {
+    mcToday.onclick = () => {
+      mcEndDateSel = new Date().toISOString().split('T')[0];
+      mcEndInp.value = mcEndDateSel;
+      mcCachedRecords = null;
+      loadMachineHistory();
+    };
+  }
+  
+  // ===== Product search input =====
+  const mcSearchInp = document.getElementById('mcSearchProduct');
+  const mcSearchClear = document.getElementById('mcSearchClear');
+  if (mcSearchInp) {
+    // ใช้ debounce 200ms เพื่อไม่ให้ render รัวเกินไปขณะพิมพ์
+    let searchTimer = null;
+    mcSearchInp.oninput = () => {
+      clearTimeout(searchTimer);
+      const v = mcSearchInp.value.trim();
+      // toggle ปุ่มล้าง
+      if (mcSearchClear) mcSearchClear.classList.toggle('show', v.length > 0);
+      searchTimer = setTimeout(() => {
+        mcSearchQuery = v;
+        // ใช้ cache ที่มีอยู่แล้ว filter ใหม่ (ไม่ต้องโหลดจาก server)
+        if (mcCachedRecords && mcCachedRange) {
+          renderMachineHistory(mcCachedRecords, mcCachedRange.start, mcCachedRange.end);
+        } else {
+          loadMachineHistory();
+        }
+      }, 200);
+    };
+  }
+  if (mcSearchClear) {
+    mcSearchClear.onclick = () => {
+      if (mcSearchInp) mcSearchInp.value = '';
+      mcSearchQuery = '';
+      mcSearchClear.classList.remove('show');
+      if (mcCachedRecords && mcCachedRange) {
+        renderMachineHistory(mcCachedRecords, mcCachedRange.start, mcCachedRange.end);
+      } else {
+        loadMachineHistory();
+      }
+    };
+  }
 }
 
 async function loadHistory(){
@@ -2286,8 +2577,11 @@ function renderHistoryCard(g){
   const dfTotal = g.dfs.reduce((s,x) => s + x.qty, 0);
   const pct = outTotal > 0 ? (dfTotal / outTotal * 100) : 0;
   const baseCls = pct < 3 ? 'ok' : pct < 6 ? 'warn' : 'bad';
-  const isDup = window._dupeMachines && window._dupeMachines.has(g.machine);
-  const cls = isDup ? 'bad dup' : baseCls;  // ถ้าซ้ำ = สีแดงเสมอ
+  // dupe: โหมดรายวันใช้ window._dupeMachines (เครื่องซ้ำ); โหมดรายเครื่องใช้ g._dupForce (วันซ้ำ)
+  const isDup = (window._dupeMachines && window._dupeMachines.has(g.machine)) || g._dupForce;
+  let cls = isDup ? 'bad dup' : baseCls;  // ถ้าซ้ำ = สีแดงเสมอ
+  // anomaly highlight (เฉพาะโหมดรายเครื่อง) — ขอบเหลืองเพิ่มเติม
+  if (g._anomaly) cls += ' anomaly';
   
   let timeStr = '';
   if (g.created_at) {
@@ -2298,7 +2592,7 @@ function renderHistoryCard(g){
   }
   
   const productDisplay = g.product 
-    ? '<span class="prod">' + histEscape(g.product) + '</span>'
+    ? '<span class="prod">' + highlightSearch(g.product) + '</span>'
     : '<span class="prod muted">(ไม่ระบุสินค้า)</span>';
   
   const monthsTh = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -2334,7 +2628,7 @@ function renderHistoryCard(g){
   details += '<div class="hist-meta-row"><span class="lbl">พนักงานประจำเครื่อง</span><span class="val">' + histEscape(g.staff || '-') + '</span></div>';
   details += '<div class="hist-meta-row"><span class="lbl">สินค้า</span>' + 
     (g.product 
-      ? '<span class="val">' + histEscape(g.product) + '</span>'
+      ? '<span class="val">' + highlightSearch(g.product) + '</span>'
       : '<span class="val muted">(ไม่ระบุ)</span>') +
     '</div>';
   
@@ -2388,8 +2682,344 @@ function renderHistoryCard(g){
   return '<div class="hist-card ' + cls + '">' + head + details + '</div>';
 }
 
+// ============================================================
+// โหมดรายเครื่อง 15 วัน — Loader
+// ============================================================
+async function loadMachineHistory(){
+  const list = document.getElementById('historyList');
+  const summary = document.getElementById('historySummary');
+  if (!list || !summary) return;
+  
+  // ตรวจสอบ filter
+  if (!mcFilterMachineSel) {
+    list.innerHTML = '<div class="hist-empty">กรุณาเลือกเครื่อง<small>เลือกแผนกและเครื่องที่ต้องการดูประวัติ</small></div>';
+    summary.innerHTML = '';
+    return;
+  }
+  if (!mcEndDateSel) {
+    mcEndDateSel = new Date().toISOString().split('T')[0];
+    const inp = document.getElementById('mcEndDate');
+    if (inp) inp.value = mcEndDateSel;
+  }
+  
+  // คำนวณช่วงวันที่ — ย้อนหลัง MC_HISTORY_DAYS วัน นับจาก mcEndDateSel
+  const endD = new Date(mcEndDateSel + 'T00:00:00');
+  const startD = new Date(endD);
+  startD.setDate(startD.getDate() - (MC_HISTORY_DAYS - 1));
+  const startStr = startD.toISOString().split('T')[0];
+  const endStr = mcEndDateSel;
+  
+  list.innerHTML = '<div class="hist-loading"><span class="spinner"></span> กำลังโหลดข้อมูล ' + MC_HISTORY_DAYS + ' วัน...</div>';
+  summary.innerHTML = '';
+  
+  try {
+    const records = await sbGet(
+      '/production_records?select=record_date,shift,dept_name,machine_name,staff_name,product_name,type_name,key_type,qty,created_at,submission_id' +
+      '&machine_name=eq.' + encodeURIComponent(mcFilterMachineSel) +
+      '&record_date=gte.' + startStr +
+      '&record_date=lte.' + endStr +
+      '&order=record_date.desc,created_at.asc&limit=2000'
+    );
+    // cache ไว้ให้ search filter ใช้ซ้ำได้โดยไม่ต้องโหลดใหม่
+    mcCachedRecords = records || [];
+    mcCachedRange = { start: startStr, end: endStr };
+    renderMachineHistory(mcCachedRecords, startStr, endStr);
+  } catch (e) {
+    list.innerHTML = '<div class="hist-empty" style="color:var(--danger)">โหลดไม่ได้: ' + (e.message || e) + '</div>';
+  }
+}
+
+// ============================================================
+// โหมดรายเครื่อง 15 วัน — Renderer
+// ============================================================
+function renderMachineHistory(records, startStr, endStr){
+  const list = document.getElementById('historyList');
+  const summary = document.getElementById('historySummary');
+  
+  // ===== Filter ตามคำค้นหาชื่อสินค้า (ถ้ามี) =====
+  // กรองที่ระดับ "submission" — ถ้า submission ไหนมีชื่อสินค้าตรงกับคำค้น (substring, case-insensitive)
+  // จะรวมทุก record ของ submission นั้นทั้งหมด
+  const totalRecordsBeforeFilter = records.length;
+  let filteredRecords = records;
+  if (mcSearchQuery && mcSearchQuery.length > 0) {
+    const q = mcSearchQuery.toLowerCase();
+    // หา submission keys ที่มีสินค้าตรงกับคำค้น
+    const matchedSubKeys = new Set();
+    records.forEach(r => {
+      const prod = (r.product_name || '').toLowerCase();
+      if (prod.includes(q)) {
+        // ใช้ key เดียวกับตอน group เพื่อให้ตรงกัน
+        const subKey = r.submission_id 
+          ? 'sub|' + r.submission_id 
+          : ['leg', r.machine_name || '-', r.record_date || '-', r.shift || '-', r.staff_name || '-', r.product_name || '-'].join('|');
+        matchedSubKeys.add(subKey);
+      }
+    });
+    // คงไว้เฉพาะ records ที่อยู่ใน submission ที่ matched
+    filteredRecords = records.filter(r => {
+      const subKey = r.submission_id 
+        ? 'sub|' + r.submission_id 
+        : ['leg', r.machine_name || '-', r.record_date || '-', r.shift || '-', r.staff_name || '-', r.product_name || '-'].join('|');
+      return matchedSubKeys.has(subKey);
+    });
+  }
+  records = filteredRecords;
+  
+  // หา dupe ภายในข้อมูลชุดนี้ (machine + date มี submission >1) — ใช้ไฮไลต์เหมือนเดิม
+  window._dupeMachines = new Set();    // โหมดนี้ scope แค่เครื่องเดียว -> ไม่ต้องใช้ก็ได้
+  const dupeDayKeys = new Set();        // key = 'YYYY-MM-DD' ที่มี submission ซ้ำ
+  {
+    const subByDay = {};
+    const seenSubs = {};
+    records.forEach(r => {
+      const subKey = r.submission_id || ('leg|' + r.machine_name + '|' + r.record_date + '|' + r.shift + '|' + r.staff_name + '|' + r.product_name);
+      if (seenSubs[subKey]) return;
+      seenSubs[subKey] = true;
+      const k = r.record_date;
+      if (!subByDay[k]) subByDay[k] = 0;
+      subByDay[k]++;
+    });
+    Object.entries(subByDay).forEach(([d, c]) => {
+      if (c > 1) dupeDayKeys.add(d);
+    });
+  }
+  
+  // ===== Group records เป็น submissions (ต่อวัน) =====
+  const groups = {};
+  records.forEach(r => {
+    let key;
+    if (r.submission_id) {
+      key = 'sub|' + r.submission_id;
+    } else {
+      key = ['leg', r.machine_name || '-', r.record_date || '-', r.shift || '-', r.staff_name || '-', r.product_name || '-'].join('|');
+    }
+    if (!groups[key]) {
+      groups[key] = {
+        key, dept: r.dept_name, machine: r.machine_name, shift: r.shift,
+        staff: r.staff_name, product: r.product_name,
+        created_at: r.created_at, record_date: r.record_date,
+        outs: [], fgs: [], dfs: []
+      };
+    }
+    const g = groups[key];
+    const qty = Number(r.qty) || 0;
+    if (r.key_type === 'Output') g.outs.push({ name: r.type_name, qty });
+    else if (r.key_type === 'FG') g.fgs.push({ name: r.type_name, qty });
+    else if (r.key_type === 'DF' && qty > 0) g.dfs.push({ name: r.type_name, qty });
+    if (r.created_at && (!g.created_at || r.created_at < g.created_at)) g.created_at = r.created_at;
+  });
+  
+  const groupList = Object.values(groups);
+  
+  // ===== Compute totals + per-submission %defect =====
+  groupList.forEach(g => {
+    g._outTotal = g.outs.reduce((s,x) => s + x.qty, 0);
+    g._fgTotal = g.fgs.reduce((s,x) => s + x.qty, 0);
+    g._dfTotal = g.dfs.reduce((s,x) => s + x.qty, 0);
+    g._pct = g._outTotal > 0 ? (g._dfTotal / g._outTotal * 100) : 0;
+  });
+  
+  // ===== Group by record_date =====
+  const byDate = {};
+  groupList.forEach(g => {
+    if (!byDate[g.record_date]) byDate[g.record_date] = [];
+    byDate[g.record_date].push(g);
+  });
+  // sort submissions within each day: by shift order then time
+  const shiftOrder = { 'เช้า':1, 'บ่าย':2, 'ดึก':3 };
+  Object.values(byDate).forEach(arr => {
+    arr.sort((a, b) => {
+      const sa = shiftOrder[a.shift] || 9;
+      const sb = shiftOrder[b.shift] || 9;
+      if (sa !== sb) return sa - sb;
+      return (a.created_at || '').localeCompare(b.created_at || '');
+    });
+  });
+  
+  // ===== Build sequential list of all 15 days (รวมวันที่ไม่มีบันทึก) =====
+  const allDays = [];
+  {
+    const start = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
+    const cur = new Date(end);
+    while (cur >= start) {
+      allDays.push(cur.toISOString().split('T')[0]);
+      cur.setDate(cur.getDate() - 1);
+    }
+  }
+  // allDays เรียง newest -> oldest แล้ว
+  
+  // ===== คำนวณ summary =====
+  const totalOut = groupList.reduce((s,g) => s + g._outTotal, 0);
+  const totalFg = groupList.reduce((s,g) => s + g._fgTotal, 0);
+  const totalDf = groupList.reduce((s,g) => s + g._dfTotal, 0);
+  const avgPct = totalOut > 0 ? (totalDf / totalOut * 100) : 0;
+  const daysWithRecords = Object.keys(byDate).length;
+  const missingDays = allDays.filter(d => !byDate[d]);
+  
+  // ===== คำนวณ "anomaly threshold" =====
+  // ใช้ค่าเฉลี่ย + 1.5 เท่า เป็น threshold (และอย่างน้อย 1.5 เท่าของ avgPct, ขั้นต่ำ 3%)
+  // เพื่อเตือนเมื่อ %defect ของ submission สูงกว่าค่าเฉลี่ยอย่างเห็นได้ชัด
+  let anomalyThreshold = Math.max(avgPct * 1.8, avgPct + 2, 3);
+  if (avgPct === 0 || groupList.length < 2) anomalyThreshold = Infinity; // ข้อมูลน้อยเกิน อย่าเตือน
+  
+  // ===== Render machine info =====
+  const monthsTh = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const fmtThai = (ds) => {
+    try {
+      const d = new Date(ds + 'T00:00:00');
+      return d.getDate() + ' ' + monthsTh[d.getMonth()] + ' ' + (d.getFullYear() + 543);
+    } catch (e) { return ds; }
+  };
+  
+  const mcInfo = (META.machines || []).find(m => m.name === mcFilterMachineSel);
+  const deptName = mcInfo ? mcInfo.dept_name : (mcFilterDeptSel || '-');
+  
+  let summaryHtml = '<div class="hist-pill" style="background:rgba(78,159,255,.12);border-color:rgba(78,159,255,.4)">' +
+    '<span>🔧 <strong>' + histEscape(mcFilterMachineSel) + '</strong> · ' + histEscape(deptName) + '</span>' +
+    '<span class="miss">📅 ' + fmtThai(startStr) + ' → ' + fmtThai(endStr) + '</span>' +
+  '</div>';
+  
+  // ===== Pill แสดงสถานะการค้นหา (ถ้ามี) =====
+  if (mcSearchQuery && mcSearchQuery.length > 0) {
+    summaryHtml += '<div class="hist-pill" style="background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4)">' +
+      '<span>🔍 ค้นหาสินค้า: <strong style="color:var(--warn)">"' + histEscape(mcSearchQuery) + '"</strong></span>' +
+      '<span class="miss">เจอ ' + groupList.length + ' บันทึก จากทั้งหมด ' + (totalRecordsBeforeFilter > 0 ? 'ที่โหลดมา' : '0') + '</span>' +
+    '</div>';
+  }
+  
+  // ===== Render summary stat grid =====
+  const pctCls = avgPct < 3 ? 'ok' : avgPct < 6 ? 'warn' : 'bad';
+  summaryHtml += '<div class="mc-stat-grid">' +
+    '<div class="mc-stat-box"><div class="lbl">บันทึก</div><div class="val">' + groupList.length + '</div><div class="sub">' + daysWithRecords + '/' + allDays.length + ' วัน</div></div>' +
+    '<div class="mc-stat-box"><div class="lbl">Output รวม</div><div class="val ok">' + totalOut.toLocaleString() + '</div></div>' +
+    '<div class="mc-stat-box"><div class="lbl">DF รวม</div><div class="val bad">' + totalDf.toLocaleString() + '</div></div>' +
+    '<div class="mc-stat-box"><div class="lbl">%Defect เฉลี่ย</div><div class="val ' + pctCls + '">' + (totalOut > 0 ? avgPct.toFixed(2) + '%' : '—') + '</div></div>' +
+  '</div>';
+  
+  // ===== แจ้งวันที่ขาด =====
+  if (missingDays.length > 0) {
+    const missLbl = missingDays.length <= 8
+      ? missingDays.map(d => fmtThai(d)).join(', ')
+      : missingDays.slice(0, 8).map(d => fmtThai(d)).join(', ') + ' ... +อีก ' + (missingDays.length - 8) + ' วัน';
+    summaryHtml += '<div class="hist-pill warn">' +
+      '<span>⚠️ <strong>ขาดบันทึก ' + missingDays.length + ' วัน</strong></span>' +
+      '<span class="miss">' + missLbl + '</span>' +
+    '</div>';
+  }
+  
+  // ===== แจ้งวันที่ %defect ผิดปกติ =====
+  if (anomalyThreshold !== Infinity) {
+    const anomalyGroups = groupList.filter(g => g._outTotal > 0 && g._pct > anomalyThreshold);
+    if (anomalyGroups.length > 0) {
+      summaryHtml += '<div class="hist-pill" style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.45)">' +
+        '<span>⚠️ <strong style="color:var(--warn)">' + anomalyGroups.length + ' บันทึก %Defect สูงผิดปกติ</strong> (เกิน ' + anomalyThreshold.toFixed(1) + '%)</span>' +
+        '<span class="miss">การ์ดที่ขอบเหลืองด้านล่าง</span>' +
+      '</div>';
+    }
+  }
+  
+  // ===== แจ้งวันที่บันทึกซ้ำ =====
+  if (dupeDayKeys.size > 0) {
+    const dupeLbl = Array.from(dupeDayKeys).sort().reverse().map(d => fmtThai(d)).join(', ');
+    summaryHtml += '<div class="hist-pill" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4)">' +
+      '<span>🚫 <strong style="color:var(--danger)">บันทึกซ้ำ ' + dupeDayKeys.size + ' วัน</strong></span>' +
+      '<span class="miss">' + dupeLbl + '</span>' +
+    '</div>';
+  }
+  
+  summary.innerHTML = summaryHtml;
+  
+  // ===== Render list =====
+  if (groupList.length === 0) {
+    if (mcSearchQuery && mcSearchQuery.length > 0) {
+      list.innerHTML = '<div class="hist-empty">🔍 ไม่พบสินค้า "<strong>' + histEscape(mcSearchQuery) + '</strong>" ของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ในช่วง ' + MC_HISTORY_DAYS + ' วันนี้<small>ลองพิมพ์คำอื่น หรือกดปุ่ม "✕ ล้าง" เพื่อดูทั้งหมด</small></div>';
+    } else {
+      list.innerHTML = '<div class="hist-empty">📭 ไม่พบบันทึกของเครื่อง <strong>' + histEscape(mcFilterMachineSel) + '</strong> ในช่วง ' + MC_HISTORY_DAYS + ' วันนี้<small>ลองเปลี่ยนวันที่ หรือเลือกเครื่องอื่น</small></div>';
+    }
+    return;
+  }
+  
+  // เก็บ "วันนี้" เพื่อ format header (เช่น "วันนี้", "เมื่อวาน")
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  let html = '';
+  allDays.forEach(dateKey => {
+    const grp = byDate[dateKey];
+    const dayLabel = fmtThai(dateKey);
+    let relTag = '';
+    if (dateKey === todayStr) relTag = '<span class="day-num">(วันนี้)</span>';
+    else {
+      const diffDays = Math.round((new Date(todayStr) - new Date(dateKey)) / 86400000);
+      if (diffDays === 1) relTag = '<span class="day-num">(เมื่อวาน)</span>';
+      else if (diffDays > 0) relTag = '<span class="day-num">(' + diffDays + ' วันก่อน)</span>';
+    }
+    
+    // หา weekday TH
+    let wkLbl = '';
+    try {
+      const dObj = new Date(dateKey + 'T00:00:00');
+      wkLbl = dObj.toLocaleDateString('th-TH', { weekday: 'short' });
+    } catch (e) {}
+    
+    if (!grp) {
+      // วันที่ขาดบันทึก
+      html += '<div class="mc-day-hdr">' +
+        '<span class="day-label">📅 ' + dayLabel + (wkLbl ? ' <span class="day-num">(' + wkLbl + ')</span>' : '') + ' ' + relTag + '</span>' +
+        '<span class="day-pct muted">— ไม่มีบันทึก —</span>' +
+      '</div>';
+      html += '<div class="mc-missing-day">⚠️ ไม่มีบันทึกในวันนี้</div>';
+    } else {
+      // คำนวณ %defect รวมของวัน
+      const dOut = grp.reduce((s,g) => s + g._outTotal, 0);
+      const dDf = grp.reduce((s,g) => s + g._dfTotal, 0);
+      const dPct = dOut > 0 ? (dDf / dOut * 100) : 0;
+      const dPctCls = dOut === 0 ? 'muted' : dPct < 3 ? 'ok' : dPct < 6 ? 'warn' : 'bad';
+      const dPctLbl = dOut > 0 ? dPct.toFixed(2) + '%' : '—';
+      
+      html += '<div class="mc-day-hdr">' +
+        '<span class="day-label">📅 ' + dayLabel + (wkLbl ? ' <span class="day-num">(' + wkLbl + ')</span>' : '') + ' ' + relTag + '</span>' +
+        '<span class="day-pct ' + dPctCls + '">' + dPctLbl + ' · ' + grp.length + (grp.length > 1 ? ' บันทึก' : ' บันทึก') + '</span>' +
+      '</div>';
+      
+      grp.forEach(g => {
+        const isAnomaly = (anomalyThreshold !== Infinity) && g._outTotal > 0 && g._pct > anomalyThreshold;
+        const isDup = dupeDayKeys.has(g.record_date) && grp.length > 1;
+        // ใส่ flag ใน g ชั่วคราว ให้ renderHistoryCard ใช้ได้
+        g._anomaly = isAnomaly;
+        g._dupForce = isDup;
+        html += renderHistoryCard(g);
+      });
+    }
+  });
+  
+  list.innerHTML = html;
+  
+  list.querySelectorAll('.hist-card').forEach(card => {
+    card.onclick = () => card.classList.toggle('expanded');
+  });
+}
+
 function histEscape(s){
   return String(s || '').replace(/[&<>"\']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ===== highlight ผลการค้นหาในชื่อสินค้า (ใช้กับโหมดรายเครื่องเท่านั้น) =====
+function highlightSearch(text){
+  if (!text) return '';
+  const escaped = histEscape(text);
+  // ถ้าไม่มี search query หรือไม่ได้อยู่โหมดรายเครื่อง -> คืนค่าปกติ
+  if (!mcSearchQuery || mcSearchQuery.length === 0 || histMode !== 'machine') {
+    return escaped;
+  }
+  // escape regex special chars ใน query
+  const q = mcSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    const re = new RegExp('(' + q + ')', 'gi');
+    return escaped.replace(re, '<span class="search-hl">$1</span>');
+  } catch (e) {
+    return escaped;
+  }
 }
 
 
@@ -2447,7 +3077,9 @@ async function deleteSubmission(g){
           await sbFetch(url, { method: 'DELETE' });
         }
         showModal('✅', 'ลบสำเร็จ', 'รายการถูกลบเรียบร้อย');
-        loadHistory(); // reload
+        // reload ตาม mode ที่อยู่
+        if (histMode === 'machine') loadMachineHistory();
+        else loadHistory();
       } catch (e) {
         showModal('❌', 'ลบไม่สำเร็จ', 'Error: ' + (e.message || e));
       }
