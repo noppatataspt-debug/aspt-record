@@ -1941,8 +1941,56 @@ async function checkDuplicate(machine_name, record_date) {
   }
 }
 
+// เครื่องที่ต้องเตือนเมื่อบันทึก FG=0 และ Output=0 (เครื่องที่ลืมลง FG จะดัน %DF เพี้ยน)
+const FG_WARN_MACHINES = ['ตะวันออก','ตะวันตก','ไฮเทค','โรจนะ','VB','LAM-SHEET'];
+
+// Called when user clicks "ยืนยันบันทึกต่อ" in FG/Output warning modal
+function proceedSubmitAfterFgWarn() {
+  closeModal();
+  window._skipFgWarnOnce = true;  // skip FG warn check next call
+  setTimeout(() => { doSubmit(); }, 100);
+}
+
 async function doSubmit() {
   const btn = document.getElementById('confirmBtn');
+  
+  // ============================================================
+  // FG/OUTPUT WARNING — เตือนถ้าเครื่องในกลุ่ม FG_WARN_MACHINES
+  // กรอกทั้ง FG=0 และ Output=0 (น่าจะลืมลง)
+  // ไม่บล็อก — แค่ให้ยืนยัน
+  // ============================================================
+  const skipFgWarn = window._skipFgWarnOnce === true;
+  if (window._skipFgWarnOnce) window._skipFgWarnOnce = false;
+  
+  if (!skipFgWarn && FG_WARN_MACHINES.includes(state.machine_name)) {
+    let fgSum = 0, outSum = 0;
+    Object.entries(state.values).forEach(([tid, v]) => {
+      const qty = Number(v) || 0;
+      const t = META.types.find(x => x.type_id === parseInt(tid));
+      if (!t) return;
+      if (t.key_type === 'FG') fgSum += qty;
+      else if (t.key_type === 'Output') outSum += qty;
+    });
+    
+    if (fgSum === 0 && outSum === 0) {
+      showModal('⚠️', 'ยังไม่ได้กรอก FG / Output',
+        '<div style="text-align:left">' +
+        '<div style="color:var(--warn);font-weight:700;margin-bottom:10px">เครื่อง ' + state.machine_name + '</div>' +
+        '<div style="color:var(--text);line-height:1.6;font-size:14px">ยังไม่ได้กรอก<strong>ของดีสำเร็จรูป (FG)</strong> และ<strong>ผลผลิต (Output)</strong></div>' +
+        '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:6px;padding:10px 12px;margin-top:10px;font-size:13px;color:var(--text);line-height:1.6">' +
+        'ถ้าบันทึกแบบนี้จะทำให้ %DEFECT รายวันคำนวณผิดพลาด เพราะตัวหาร (FG) จะน้อยกว่าจริง' +
+        '</div>' +
+        '<div style="color:var(--t2);font-size:13px;margin-top:12px;line-height:1.6">ต้องการบันทึกต่อใช่ไหม?<br>' +
+        '<span style="font-size:12px;color:var(--t3)">(ถ้ายังไม่จบกะ ให้ยกเลิกแล้วกรอก FG/Output ก่อน)</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:14px">' +
+        '<button onclick="closeModal()" style="padding:10px;border:1px solid var(--bdr);border-radius:8px;background:transparent;color:var(--t2);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">ยกเลิก กรอกเพิ่ม</button>' +
+        '<button onclick="proceedSubmitAfterFgWarn()" style="padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--warn) 0%,#d97706 100%);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">✓ ยืนยันบันทึกต่อ</button>' +
+        '</div>' +
+        '</div>');
+      return;
+    }
+  }
   
   // ============================================================
   // DUPLICATE CHECK — บล็อกถ้าเจอเครื่องเดียวกัน+วันเดียวกัน
