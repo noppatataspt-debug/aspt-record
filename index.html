@@ -1830,6 +1830,14 @@ const saveQueue = (q) => { try { localStorage.setItem('aspt3_queue', JSON.string
 // ============================================================
 // ไปหน้า review ก่อน submit
 function goToReview() {
+  // ============================================================
+  // FG/OUTPUT WARNING — เตือนก่อนเข้าหน้า review
+  // เงื่อนไข 1: ทุกเครื่อง — ถ้า Output = 0 → เตือน
+  // เงื่อนไข 2: เครื่องในลิสต์ FG_WARN_MACHINES — ถ้า FG = 0 → เตือน
+  // ถ้าผู้ใช้ยืนยันใน modal → flag _skipFgWarnOnce ถูก set แล้วเรียก goToReview ซ้ำ
+  // ============================================================
+  if (showFgOutputWarningIfNeeded()) return;
+  
   // คำนวณสรุป
   let output = 0, fg = 0, df = 0;
   const outputItems = [], fgItems = [], dfItems = [];
@@ -1948,49 +1956,77 @@ const FG_WARN_MACHINES = ['ตะวันออก','ตะวันตก','�
 function proceedSubmitAfterFgWarn() {
   closeModal();
   window._skipFgWarnOnce = true;  // skip FG warn check next call
-  setTimeout(() => { doSubmit(); }, 100);
+  setTimeout(() => { goToReview(); }, 100);
+}
+
+// ตรวจสอบว่ามีข้อมูลสำคัญหายไปไหม → คืนค่า {missingOutput, missingFg, fgSum, outSum}
+// ใช้ทั้งใน goToReview() และ doSubmit() เป็น safety net
+function checkMissingFgOutput() {
+  let fgSum = 0, outSum = 0;
+  Object.entries(state.values).forEach(([tid, v]) => {
+    const qty = Number(v) || 0;
+    const t = META.types.find(x => x.type_id === parseInt(tid));
+    if (!t) return;
+    if (t.key_type === 'FG') fgSum += qty;
+    else if (t.key_type === 'Output') outSum += qty;
+  });
+  return {
+    fgSum, outSum,
+    missingOutput: outSum === 0,
+    missingFg: FG_WARN_MACHINES.includes(state.machine_name) && fgSum === 0
+  };
+}
+
+// แสดง warning modal สำหรับ FG/Output ที่หาย — return true ถ้าแสดงและควร abort flow
+function showFgOutputWarningIfNeeded() {
+  if (window._skipFgWarnOnce) {
+    window._skipFgWarnOnce = false;
+    return false;  // user ยืนยันแล้ว ผ่านได้
+  }
+  
+  const c = checkMissingFgOutput();
+  if (!c.missingOutput && !c.missingFg) return false;  // ไม่มีอะไรหาย ผ่าน
+  
+  const missingList = [];
+  if (c.missingFg) missingList.push('<strong>ของดีสำเร็จรูป (FG)</strong>');
+  if (c.missingOutput) missingList.push('<strong>ผลผลิต (Output)</strong>');
+  const missingText = missingList.join(' และ ');
+  
+  const reasonText = c.missingFg
+    ? 'ถ้าบันทึกแบบนี้จะทำให้ %DEFECT รายวันคำนวณผิดพลาด เพราะตัวหาร (FG) จะน้อยกว่าจริง'
+    : 'ถ้าบันทึกแบบนี้ ระบบจะไม่มีข้อมูลผลผลิตของกะนี้';
+  
+  showModal('⚠️', 'ยังไม่ได้กรอกข้อมูลสำคัญ',
+    '<div style="text-align:left">' +
+    '<div style="color:var(--warn);font-weight:700;margin-bottom:10px">เครื่อง ' + state.machine_name + '</div>' +
+    '<div style="color:var(--text);line-height:1.6;font-size:14px">ยังไม่ได้กรอก ' + missingText + '</div>' +
+    '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:6px;padding:10px 12px;margin-top:10px;font-size:13px;color:var(--text);line-height:1.6">' +
+    reasonText +
+    '</div>' +
+    '<div style="color:var(--t2);font-size:13px;margin-top:12px;line-height:1.6">ต้องการบันทึกต่อใช่ไหม?<br>' +
+    '<span style="font-size:12px;color:var(--t3)">(ถ้ายังไม่จบกะ ให้ยกเลิกแล้วกรอกข้อมูลที่หายก่อน)</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:14px">' +
+    '<button onclick="closeModal()" style="padding:10px;border:1px solid var(--bdr);border-radius:8px;background:transparent;color:var(--t2);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">ยกเลิก กรอกเพิ่ม</button>' +
+    '<button onclick="proceedSubmitAfterFgWarn()" style="padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--warn) 0%,#d97706 100%);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">✓ ยืนยันบันทึกต่อ</button>' +
+    '</div>' +
+    '</div>');
+  return true;  // แสดง modal แล้ว — caller ต้อง abort
 }
 
 async function doSubmit() {
   const btn = document.getElementById('confirmBtn');
   
   // ============================================================
-  // FG/OUTPUT WARNING — เตือนถ้าเครื่องในกลุ่ม FG_WARN_MACHINES
-  // กรอกทั้ง FG=0 และ Output=0 (น่าจะลืมลง)
-  // ไม่บล็อก — แค่ให้ยืนยัน
+  // FG/OUTPUT WARNING — safety net (ปกติเช็คตั้งแต่ goToReview แล้ว)
+  // ถ้าผู้ใช้ยืนยันใน modal แล้ว flag _skipFgWarnOnce จะถูก set
   // ============================================================
-  const skipFgWarn = window._skipFgWarnOnce === true;
-  if (window._skipFgWarnOnce) window._skipFgWarnOnce = false;
+  if (showFgOutputWarningIfNeeded()) return;
   
-  if (!skipFgWarn && FG_WARN_MACHINES.includes(state.machine_name)) {
-    let fgSum = 0, outSum = 0;
-    Object.entries(state.values).forEach(([tid, v]) => {
-      const qty = Number(v) || 0;
-      const t = META.types.find(x => x.type_id === parseInt(tid));
-      if (!t) return;
-      if (t.key_type === 'FG') fgSum += qty;
-      else if (t.key_type === 'Output') outSum += qty;
-    });
-    
-    if (fgSum === 0 && outSum === 0) {
-      showModal('⚠️', 'ยังไม่ได้กรอก FG / Output',
-        '<div style="text-align:left">' +
-        '<div style="color:var(--warn);font-weight:700;margin-bottom:10px">เครื่อง ' + state.machine_name + '</div>' +
-        '<div style="color:var(--text);line-height:1.6;font-size:14px">ยังไม่ได้กรอก<strong>ของดีสำเร็จรูป (FG)</strong> และ<strong>ผลผลิต (Output)</strong></div>' +
-        '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:6px;padding:10px 12px;margin-top:10px;font-size:13px;color:var(--text);line-height:1.6">' +
-        'ถ้าบันทึกแบบนี้จะทำให้ %DEFECT รายวันคำนวณผิดพลาด เพราะตัวหาร (FG) จะน้อยกว่าจริง' +
-        '</div>' +
-        '<div style="color:var(--t2);font-size:13px;margin-top:12px;line-height:1.6">ต้องการบันทึกต่อใช่ไหม?<br>' +
-        '<span style="font-size:12px;color:var(--t3)">(ถ้ายังไม่จบกะ ให้ยกเลิกแล้วกรอก FG/Output ก่อน)</span>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-top:14px">' +
-        '<button onclick="closeModal()" style="padding:10px;border:1px solid var(--bdr);border-radius:8px;background:transparent;color:var(--t2);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">ยกเลิก กรอกเพิ่ม</button>' +
-        '<button onclick="proceedSubmitAfterFgWarn()" style="padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--warn) 0%,#d97706 100%);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">✓ ยืนยันบันทึกต่อ</button>' +
-        '</div>' +
-        '</div>');
-      return;
-    }
-  }
+  // ============================================================
+  // DUPLICATE CHECK — บล็อกถ้าเจอเครื่องเดียวกัน+วันเดียวกัน
+  // ข้าม check ถ้าเป็น edit mode และ machine+date ไม่เปลี่ยน
+  // ============================================================
   
   // ============================================================
   // DUPLICATE CHECK — บล็อกถ้าเจอเครื่องเดียวกัน+วันเดียวกัน
