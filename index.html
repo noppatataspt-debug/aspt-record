@@ -906,7 +906,12 @@ let state = {
   machine_name: '',
   staff_name: '',
   shift: 'เช้า',
-  date: new Date().toISOString().split('T')[0],
+  // Default = "เมื่อวาน" เพราะส่วนใหญ่พนักงานบันทึกข้อมูลย้อนหลังหลังรวบรวมเสร็จ
+  date: (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  })(),
   product: '',        // legacy single - kept for backward compat + edit mode
   products: [''],     // v9: array of products (1 or more)
   values: {} // {type_id: qty}
@@ -2805,12 +2810,22 @@ function renderHistory(records){
     byDept[g.dept].push(g);
   });
   
+  // สร้าง map ชื่อเครื่อง -> mc_id เพื่อใช้เรียงลำดับ
+  const mcIdMap = {};
+  (META.machines || []).forEach(m => { mcIdMap[m.name] = m.mc_id; });
+  
   const shiftOrder = { 'เช้า':1, 'บ่าย':2, 'ดึก':3 };
   Object.values(byDept).forEach(arr => {
     arr.sort((a, b) => {
+      // เรียงตาม mc_id ก่อน (เครื่องที่ไม่อยู่ในตาราง = ไปท้ายสุด)
+      const ia = mcIdMap[a.machine] != null ? mcIdMap[a.machine] : 9999;
+      const ib = mcIdMap[b.machine] != null ? mcIdMap[b.machine] : 9999;
+      if (ia !== ib) return ia - ib;
+      // เครื่องเดียวกัน: เรียงตามกะ (เช้า → บ่าย → ดึก)
       const sa = shiftOrder[a.shift] || 9;
       const sb = shiftOrder[b.shift] || 9;
       if (sa !== sb) return sa - sb;
+      // กะเดียวกัน: เรียงตามเวลาบันทึก
       return (a.created_at || '').localeCompare(b.created_at || '');
     });
   });
