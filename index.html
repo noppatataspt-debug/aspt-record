@@ -1118,7 +1118,20 @@ function renderProductsList(){
   // Attach handlers
   container.querySelectorAll('.product-input-multi').forEach(input => {
     const idx = parseInt(input.dataset.idx);
-    input.oninput = (e) => handleProductInput(idx, e.target.value);
+    input.oninput = (e) => {
+      // === Auto-uppercase ASCII letters (preserve x lowercase + Thai) ===
+      const el = e.target;
+      const original = el.value;
+      let normalized = original.replace(/[a-wyz]/g, c => c.toUpperCase());
+      // ถ้าพิมพ์ X ระหว่างตัวเลข/T → convert เป็น x (size separator)
+      normalized = normalized.replace(/(\d|\.)X(\d|T)/g, '$1x$2');
+      if (normalized !== original) {
+        const cursorPos = el.selectionStart;
+        el.value = normalized;
+        try { el.setSelectionRange(cursorPos, cursorPos); } catch(_) {}
+      }
+      handleProductInput(idx, el.value);
+    };
     input.onfocus = (e) => {
       const val = e.target.value.trim();
       // ข้อ 4: ถ้าค่ายังตรงกับที่เพิ่งเลือก ไม่ต้องโชว์ autocomplete
@@ -2019,6 +2032,175 @@ function showFgOutputWarningIfNeeded() {
   return true;  // แสดง modal แล้ว — caller ต้อง abort
 }
 
+// ============================================================
+// PRODUCT PATTERN VALIDATION (ISO9001)
+// pattern: <ชื่อย่อลูกค้า>-<size with x>
+// ยกเว้นกลุ่ม SKIC / TKIC / VKPC
+// ============================================================
+function validateProductPattern(name) {
+  if (!name) return { valid: true, suggested: null, reason: '' };
+  const s = String(name).trim();
+
+  const upPrefix = (p) => /^[a-z\.&\@]+$/.test(p) ? p.toUpperCase() : p;
+  const needsUppercase = (p) => /^[a-z\.&\@]+$/.test(p);
+
+  // Exempt: SKIC/TKIC/VKPC group
+  if (/^(SKIC|TKIC|VKPC)/i.test(s)) {
+    if (needsUppercase(s.split(/[-_\d]/)[0])) {
+      return { valid: false, suggested: s.toUpperCase(),
+        reason: 'lowercase-skic', message: 'ชื่อกลุ่ม SKIC ควรเป็นพิมพ์ใหญ่ทั้งหมด',
+        label: '⚠️ ตัวพิมพ์' };
+    }
+    return { valid: true, suggested: null, reason: 'exempt-skic-group', label: '✓ ยกเว้น (SKIC group)' };
+  }
+
+  // Plain name (no digit/dash/x/underscore) → OK
+  if (!/[-_0-9xX]/.test(s)) {
+    if (needsUppercase(s)) {
+      return { valid: false, suggested: upPrefix(s),
+        reason: 'lowercase-plain', message: 'ชื่อสินค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์' };
+    }
+    return { valid: true, suggested: null, reason: 'plain-name', label: '✓ ชื่อล้วน' };
+  }
+
+  // Correct: <prefix>-<digits with x>
+  const correctMatch = s.match(/^([A-Za-zก-๙&\.\@]+)-(\d+(?:\.\d+)?[xX].*)$/);
+  if (correctMatch) {
+    const prefix = correctMatch[1];
+    if (needsUppercase(prefix)) {
+      return { valid: false, suggested: upPrefix(prefix) + '-' + correctMatch[2],
+        reason: 'lowercase-prefix', message: 'ชื่อลูกค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์' };
+    }
+    return { valid: true, suggested: null, reason: 'correct-dash-x', label: '✓ ถูก pattern' };
+  }
+
+  // Warn: code-only like TW-90 (non-SKIC)
+  const codeOnly = s.match(/^([A-Za-zก-๙]+)-(\d+)$/);
+  if (codeOnly) {
+    const prefix = codeOnly[1];
+    const fixed = needsUppercase(prefix) ? upPrefix(prefix) + '-' + codeOnly[2] : s;
+    return { valid: false, suggested: fixed, reason: 'code-only',
+      message: 'ชื่อนี้เป็นรหัสล้วน — ถ้าเป็น pattern SKIC-4400 ก็บันทึกได้',
+      label: '⚠️ รหัสล้วน' };
+  }
+
+  // Fix: <prefix>-<num>-T<num> → <prefix>-<num>xT<num>
+  const dT = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/i);
+  if (dT) {
+    return { valid: false,
+      suggested: `${upPrefix(dT[1])}-${dT[2]}xT${dT[3]}${dT[4]}`,
+      reason: 'dash-T-needs-fix',
+      message: 'ใช้ "-" คั่นขนาด ควรใช้ "x" แทน',
+      label: '⚠️ pattern ผิด' };
+  }
+
+  // Fix: <prefix><digit>x... (no dash) → <prefix>-<size>
+  const nD = s.match(/^([^-]*?)(\d+[xX].*)$/);
+  if (nD && nD[1].length > 0 && !/\d$/.test(nD[1])) {
+    return { valid: false,
+      suggested: `${upPrefix(nD[1])}-${nD[2]}`,
+      reason: 'no-dash-needs-fix',
+      message: 'ไม่มี "-" คั่นชื่อกับขนาด',
+      label: '⚠️ ขาด dash' };
+  }
+
+  return { valid: false, suggested: null, reason: 'unknown',
+    message: 'pattern ไม่ตรงมาตรฐาน', label: '⚠️ pattern แปลก' };
+}
+
+function showProductPatternModal(invalidProducts) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.6); z-index:10000;
+      display:flex; align-items:center; justify-content:center; padding:16px;
+    `;
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:var(--s1, white); color:var(--text, #0f172a);
+      border-radius:16px; max-width:560px; width:100%;
+      max-height:90vh; overflow-y:auto; padding:24px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.3);
+      font-family:inherit;
+    `;
+    let body = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:20px; font-weight:700; color:var(--danger,#dc2626); margin-bottom:6px;">
+          ⚠️ ชื่อสินค้าไม่ตรง pattern มาตรฐาน
+        </div>
+        <div style="font-size:13px; color:var(--t2,#666); line-height:1.5;">
+          ตามมาตรฐาน ISO9001 ของบริษัท: <strong>ชื่อลูกค้า</strong>-<strong>ขนาด</strong> (คั่นด้วย x)<br>
+          ยกเว้นกลุ่ม SKIC/TKIC/VKPC
+        </div>
+      </div>
+      <div style="border:1px solid var(--bdr,#e5e7eb); border-radius:10px; padding:12px; margin-bottom:16px; background:var(--s2,#fafafa);">
+    `;
+    invalidProducts.forEach((p, idx) => {
+      const hasSuggestion = !!p.validation.suggested && p.validation.suggested !== p.name;
+      body += `
+        <div style="padding:10px 0; ${idx > 0 ? 'border-top:1px solid var(--bdr,#e5e7eb);' : ''}">
+          <div style="font-size:14px; margin-bottom:4px;">
+            <span style="color:var(--danger,#dc2626); font-weight:600;">${escapeHtml(p.name)}</span>
+          </div>
+          <div style="font-size:12px; color:var(--t2,#666); margin-bottom:6px;">
+            ${escapeHtml(p.validation.message || 'pattern ไม่ตรง')}
+          </div>
+          ${hasSuggestion ? `
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(16,185,129,.12); border:1px solid #10b981; border-radius:6px; flex-wrap:wrap;">
+              <span style="font-size:12px; color:#065f46;">แนะนำ:</span>
+              <strong style="color:#065f46; font-size:14px; word-break:break-all;">${escapeHtml(p.validation.suggested)}</strong>
+              <button class="btn-use-suggest" data-idx="${idx}" style="
+                margin-left:auto; padding:4px 10px; font-size:12px;
+                background:#10b981; color:white; border:none; border-radius:4px;
+                cursor:pointer; font-weight:600; font-family:inherit;
+              ">ใช้</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    });
+    body += `
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+        <button id="pat-cancel" style="padding:10px 20px; border:1.5px solid var(--bdr,#d1d5db); background:transparent; color:var(--text,inherit);
+          border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; font-family:inherit;">← กลับไปแก้ไข</button>
+        <button id="pat-confirm" style="padding:10px 20px; border:none; background:var(--danger,#dc2626); color:white;
+          border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; font-family:inherit;">บันทึกตามที่กรอก</button>
+      </div>
+    `;
+    card.innerHTML = body;
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const replacements = new Map();
+    card.querySelectorAll('.btn-use-suggest').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const p = invalidProducts[idx];
+        replacements.set(p.name, p.validation.suggested);
+        btn.textContent = '✓ ใช้แล้ว';
+        btn.style.background = '#059669';
+        btn.disabled = true;
+      });
+    });
+    card.querySelector('#pat-cancel').addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve({ accept: false, replacements });
+    });
+    card.querySelector('#pat-confirm').addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve({ accept: true, replacements });
+    });
+  });
+}
+
+// One-shot flag — set after user confirms in pattern modal
+// so doSubmit doesn't re-validate on the retry pass.
+window._skipPatternCheckOnce = false;
+
 async function doSubmit() {
   const btn = document.getElementById('confirmBtn');
   
@@ -2089,6 +2271,70 @@ async function doSubmit() {
       '</div>');
     return;
   }
+  
+  // ============================================================
+  // PRODUCT PATTERN VALIDATION (ISO9001)
+  // เช็คเฉพาะ "สินค้าใหม่" ที่ไม่อยู่ใน master list (META.products)
+  // ถ้าไม่ตรง pattern → เด้ง modal ให้ยืนยัน / เลือก suggested fix
+  // ============================================================
+  if (!window._skipPatternCheckOnce) {
+    const knownNames = new Set((META.products || []).map(p => (p.name || '').trim()));
+    const currentNames = (state.products || [])
+      .map(p => (p || '').trim())
+      .filter(p => p.length > 0);
+
+    // dedup ภายในการกรอกครั้งนี้ (ไม่ต้องเช็คชื่อเดียวกัน 2 รอบ)
+    const seen = new Set();
+    const newProductNames = [];
+    currentNames.forEach(n => {
+      if (seen.has(n)) return;
+      seen.add(n);
+      if (!knownNames.has(n)) newProductNames.push(n);
+    });
+
+    if (newProductNames.length > 0) {
+      const invalidOnes = newProductNames
+        .map(n => ({ name: n, validation: validateProductPattern(n) }))
+        .filter(r => !r.validation.valid);
+
+      if (invalidOnes.length > 0) {
+        btn.disabled = false;
+        btn.textContent = '✓ ยืนยันส่งข้อมูล';
+
+        const result = await showProductPatternModal(invalidOnes);
+        if (!result.accept) {
+          // user กดกลับไปแก้ไข → abort
+          return;
+        }
+
+        // apply replacements (ถ้ามี) เข้า state.products
+        if (result.replacements.size > 0) {
+          let changed = false;
+          state.products = state.products.map(p => {
+            const trimmed = (p || '').trim();
+            if (result.replacements.has(trimmed)) {
+              changed = true;
+              return result.replacements.get(trimmed);
+            }
+            return p;
+          });
+          if (changed) {
+            syncProductLegacy();
+            saveDraft();
+            renderProductsList();
+          }
+        }
+
+        // ผู้ใช้ยืนยันแล้ว → ข้าม pattern check รอบถัดไป + retry submit
+        // (ใช้ flag pattern เดียวกับ dup-warn เพื่อไม่ให้เด้งซ้ำ)
+        window._skipPatternCheckOnce = true;
+        window._skipDupOnce = true;  // ข้าม dup check ด้วย (เพิ่งผ่านมา)
+        setTimeout(() => { doSubmit(); }, 50);
+        return;
+      }
+    }
+  }
+  if (window._skipPatternCheckOnce) window._skipPatternCheckOnce = false;
   
   // ============================================================
   // Build records (หลังผ่านเช็คซ้ำ)
