@@ -1,9 +1,14 @@
 // ============================================================
-// Vercel Serverless Function: Weekly %DF Summary
+// Vercel Serverless Function: Weekly %DF Summary v2
 // ============================================================
 // ส่งทุกวันจันทร์ 07:30 ตามเวลาไทย (00:30 UTC)
 // สรุป %DF ของสัปดาห์ที่ผ่านมา (จ-อา)
-// แสดงเฉพาะแผนกที่ "เกิน Target" + "ใกล้ Target"
+//
+// อัพเดท v2:
+// 1. สูตร %DF ถูกต้องตาม dashboard
+//    - Laminate, LAM-SHEET → DF/FG
+//    - เครื่องอื่น → DF/Output
+// 2. รองรับสัปดาห์คาบเดือน (เพิ่ม section "ปิดเดือนก่อน")
 // ============================================================
 
 const MC_TARGETS = {
@@ -21,9 +26,12 @@ const MC_TARGETS = {
 };
 
 const DEFAULT_TARGET = 5;
+const USE_FG_AS_DENOMINATOR = ['Laminate', 'LAM-SHEET'];
+
+const MONTHS_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
 export default async function handler(req, res) {
-  // ป้องกัน manual call จากภายนอก (รับเฉพาะ Vercel Cron + manual GET เพื่อ test)
   try {
     const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const LINE_GROUP_ID = process.env.LINE_GROUP_ID;
@@ -31,61 +39,52 @@ export default async function handler(req, res) {
     const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
     if (!LINE_TOKEN || !LINE_GROUP_ID || !SUPABASE_URL || !SUPABASE_KEY) {
-      console.error('Missing env vars');
       return res.status(500).json({ error: 'Missing credentials' });
     }
 
-    // คำนวณช่วงเวลา: จันทร์-อาทิตย์ของสัปดาห์ที่ผ่านมา (ตามเวลาไทย)
-    const { startDate, endDate, displayRange } = getLastWeekRange();
-    console.log(`Summary period: ${startDate} to ${endDate} (${displayRange})`);
+    // คำนวณช่วงสัปดาห์ที่ผ่านมา (จ-อา)
+    const week = getLastWeekRange();
+    console.log(`Week period: ${week.startDate} to ${week.endDate}`);
 
-    // ดึงข้อมูลทั้งหมดในช่วงนั้น
-    const records = await fetchRecords(SUPABASE_URL, SUPABASE_KEY, startDate, endDate);
-    console.log(`Found ${records.length} records`);
+    // เช็คคาบเดือนไหม
+    const crossMonth = isCrossMonth(week.startDate, week.endDate);
+    console.log(`Cross month: ${crossMonth}`);
 
-    if (records.length === 0) {
-      console.log('No records found, skipping summary');
-      return res.status(200).json({
-        message: 'No records in this period',
-        period: displayRange
-      });
+    // ดึงข้อมูลสัปดาห์
+    const weekRecords = await fetchRecords(SUPABASE_URL, SUPABASE_KEY, week.startDate, week.endDate);
+    console.log(`Week records: ${weekRecords.length}`);
+
+    let monthRecords = null;
+    let monthRange = null;
+
+    if (crossMonth) {
+      // คาบเดือน → ดึงเดือนก่อน (ทั้งเดือน)
+      monthRange = getPreviousMonthRange(week.startDate);
+      console.log(`Previous month: ${monthRange.startDate} to ${monthRange.endDate}`);
+      monthRecords = await fetchRecords(SUPABASE_URL, SUPABASE_KEY, monthRange.startDate, monthRange.endDate);
+      console.log(`Month records: ${monthRecords.length}`);
     }
 
-    // จัดกลุ่มและคำนวณ %DF ของแต่ละแผนก/เครื่อง
-    const summary = summarizeByMachine(records);
-    console.log(`Summarized ${summary.length} machines`);
+    // สรุปข้อมูล
+    const weekSummary = summarizeByMachine(weekRecords);
+    const monthSummary = crossMonth ? summarizeByMachine(monthRecords) : null;
 
-    // กรองเฉพาะที่ "เกิน" หรือ "ใกล้" Target
-    const alerts = summary
-      .filter((s) => s.status === 'over' || s.status === 'warning')
-      .sort((a, b) => b.dfRatio - a.dfRatio); // เรียงจากแย่ที่สุด
-
-    // หาแผนกที่ไม่บันทึก (ไม่อยู่ใน records แต่อยู่ใน MC_TARGETS)
-    const reportedMachines = new Set(summary.map((s) => s.machine));
-    const notReported = Object.keys(MC_TARGETS).filter(
-      (m) => !reportedMachines.has(m)
-    );
-
-    // สร้าง Flex Message
+    // สร้าง message
     const flexMessage = buildWeeklyFlexMessage({
-      displayRange,
-      totalMachines: summary.length,
-      okCount: summary.filter((s) => s.status === 'ok').length,
-      warningCount: summary.filter((s) => s.status === 'warning').length,
-      overCount: summary.filter((s) => s.status === 'over').length,
-      alerts,
-      notReported
+      crossMonth,
+      week: { ...week, summary: weekSummary },
+      month: crossMonth ? { ...monthRange, summary: monthSummary } : null
     });
 
-    // ส่งไป LINE
     await sendLineMessage(LINE_TOKEN, LINE_GROUP_ID, flexMessage);
-    console.log('Weekly summary sent successfully!');
+    console.log('Weekly summary sent!');
 
     return res.status(200).json({
       success: true,
-      period: displayRange,
-      machines_summarized: summary.length,
-      alerts_sent: alerts.length
+      period: week.displayRange,
+      crossMonth,
+      week_machines: weekSummary.length,
+      month_machines: monthSummary?.length || 0
     });
   } catch (error) {
     console.error('Error:', error.message);
@@ -95,15 +94,13 @@ export default async function handler(req, res) {
 }
 
 // ============================================================
-// Helper: คำนวณช่วง จ-อา ของสัปดาห์ที่ผ่านมา (ตามเวลาไทย)
+// Helper: ช่วงสัปดาห์ที่ผ่านมา (จ-อา) ตามเวลาไทย
 // ============================================================
 function getLastWeekRange() {
-  // เวลาไทย = UTC+7
   const now = new Date();
   const thaiNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
 
-  // หาวันจันทร์ของสัปดาห์ปัจจุบัน (วันที่ cron ทำงาน คือ จันทร์เช้า)
-  // ดังนั้น "สัปดาห์ก่อน" = ย้อนหลัง 7 วันจากจันทร์นี้
+  // หาวันจันทร์ของสัปดาห์ที่ผ่านมา
   const dayOfWeek = thaiNow.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
   const daysToLastMonday = dayOfWeek === 1 ? 7 : (dayOfWeek + 6) % 7 + 7;
 
@@ -114,14 +111,45 @@ function getLastWeekRange() {
   const lastSunday = new Date(lastMonday);
   lastSunday.setUTCDate(lastMonday.getUTCDate() + 6);
 
-  // Format: YYYY-MM-DD
-  const startDate = formatDateISO(lastMonday);
-  const endDate = formatDateISO(lastSunday);
+  return {
+    startDate: formatDateISO(lastMonday),
+    endDate: formatDateISO(lastSunday),
+    displayRange: formatDateRange(lastMonday, lastSunday),
+    startObj: lastMonday,
+    endObj: lastSunday
+  };
+}
 
-  // Format display: DD-DD MMM YYYY
-  const displayRange = formatDateRange(lastMonday, lastSunday);
+// ============================================================
+// Helper: เช็คว่าสัปดาห์คาบเดือนไหม
+// ============================================================
+function isCrossMonth(startDate, endDate) {
+  const startMonth = startDate.substring(0, 7); // YYYY-MM
+  const endMonth = endDate.substring(0, 7);
+  return startMonth !== endMonth;
+}
 
-  return { startDate, endDate, displayRange };
+// ============================================================
+// Helper: ช่วงเดือนก่อน (1 ถึงสิ้นเดือน)
+// ============================================================
+function getPreviousMonthRange(weekStartDate) {
+  // weekStartDate = "2026-04-27" → เดือนก่อน = "2026-04"
+  const startMonth = weekStartDate.substring(0, 7); // "2026-04"
+  const [year, month] = startMonth.split('-').map(Number);
+
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const lastDay = new Date(Date.UTC(year, month, 0)); // วันที่ 0 ของเดือนถัดไป = วันสุดท้ายเดือนนี้
+
+  const monthLabel = `${MONTHS_TH[month - 1]} ${String(year + 543).slice(-2)}`;
+  const dayRange = `${firstDay.getUTCDate()}–${lastDay.getUTCDate()} ${MONTHS_TH[month - 1]}`;
+
+  return {
+    startDate: formatDateISO(firstDay),
+    endDate: formatDateISO(lastDay),
+    monthLabel,
+    dayRange,
+    daysInMonth: lastDay.getUTCDate()
+  };
 }
 
 function formatDateISO(d) {
@@ -132,12 +160,10 @@ function formatDateISO(d) {
 }
 
 function formatDateRange(start, end) {
-  const monthsThai = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-                      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const startDay = start.getUTCDate();
   const endDay = end.getUTCDate();
-  const startMonth = monthsThai[start.getUTCMonth()];
-  const endMonth = monthsThai[end.getUTCMonth()];
+  const startMonth = MONTHS_TH[start.getUTCMonth()];
+  const endMonth = MONTHS_TH[end.getUTCMonth()];
   const startYear = (start.getUTCFullYear() + 543).toString().slice(-2);
   const endYear = (end.getUTCFullYear() + 543).toString().slice(-2);
 
@@ -149,16 +175,16 @@ function formatDateRange(start, end) {
 }
 
 // ============================================================
-// Helper: ดึง records ทั้งหมดในช่วงเวลา
+// Helper: ดึง records จาก Supabase
 // ============================================================
 async function fetchRecords(supabaseUrl, supabaseKey, startDate, endDate) {
-  const url = `${supabaseUrl}/rest/v1/production_records?record_date=gte.${startDate}&record_date=lte.${endDate}&select=*`;
+  // pg_net default limit 1000 records — ใช้ limit สูงๆ เผื่อข้อมูลเยอะ
+  const url = `${supabaseUrl}/rest/v1/production_records?record_date=gte.${startDate}&record_date=lte.${endDate}&select=*&limit=5000`;
 
   const response = await fetch(url, {
     headers: {
       apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      Prefer: 'count=exact'
+      Authorization: `Bearer ${supabaseKey}`
     }
   });
 
@@ -171,10 +197,12 @@ async function fetchRecords(supabaseUrl, supabaseKey, startDate, endDate) {
 }
 
 // ============================================================
-// Helper: สรุป %DF ของแต่ละแผนก/เครื่อง
+// Helper: สรุป %DF ของแต่ละเครื่อง
+// ใช้สูตรเดียวกับ dashboard:
+//   Laminate, LAM-SHEET → DF/FG
+//   เครื่องอื่น → DF/Output
 // ============================================================
 function summarizeByMachine(records) {
-  // group ตาม machine_name
   const groups = {};
 
   records.forEach((r) => {
@@ -184,6 +212,7 @@ function summarizeByMachine(records) {
         machine,
         dept: r.dept_name || '-',
         outputTotal: 0,
+        fgTotal: 0,
         dfTotal: 0
       };
     }
@@ -193,15 +222,19 @@ function summarizeByMachine(records) {
 
     if (keyType === 'OUTPUT') {
       groups[machine].outputTotal += qty;
+    } else if (keyType === 'FG') {
+      groups[machine].fgTotal += qty;
     } else if (keyType === 'DF' || keyType === 'NG' || keyType === 'DEFECT') {
       groups[machine].dfTotal += qty;
     }
   });
 
-  // คำนวณ %DF และ status
   return Object.values(groups).map((g) => {
-    const dfPercent = g.outputTotal > 0
-      ? ((g.dfTotal / g.outputTotal) * 100)
+    const useFG = USE_FG_AS_DENOMINATOR.includes(g.machine);
+    const denominator = useFG ? g.fgTotal : g.outputTotal;
+
+    const dfPercent = denominator > 0
+      ? ((g.dfTotal / denominator) * 100)
       : 0;
 
     const target = MC_TARGETS[g.machine] !== undefined
@@ -212,13 +245,9 @@ function summarizeByMachine(records) {
     const dfRatio = target > 0 ? dfPercent / target : 0;
 
     let status;
-    if (dfPercent > target) {
-      status = 'over';
-    } else if (dfPercent > target * 0.75) {
-      status = 'warning';
-    } else {
-      status = 'ok';
-    }
+    if (dfPercent > target) status = 'over';
+    else if (dfPercent > target * 0.75) status = 'warning';
+    else status = 'ok';
 
     return {
       machine: g.machine,
@@ -227,7 +256,8 @@ function summarizeByMachine(records) {
       target,
       hasTarget,
       dfRatio,
-      status
+      status,
+      useFG
     };
   });
 }
@@ -238,122 +268,54 @@ function summarizeByMachine(records) {
 function buildWeeklyFlexMessage(data) {
   const bodyContents = [];
 
-  // ── ส่วนที่ 1: สรุปเป็นตัวเลข 3 ช่อง ──
-  bodyContents.push({
-    type: 'box',
-    layout: 'horizontal',
-    spacing: 'sm',
-    contents: [
-      summaryBox('ผ่าน', data.okCount, '#EAF3DE', '#3B6D11', '#173404'),
-      summaryBox('ใกล้ Target', data.warningCount, '#FFEDD5', '#C2410C', '#7C2D12'),
-      summaryBox('เกิน Target', data.overCount, '#FEE2E2', '#B91C1C', '#7F1D1D')
-    ]
-  });
-
-  bodyContents.push({ type: 'separator', margin: 'md' });
-
-  // ── ส่วนที่ 2: รายการเกิน Target ──
-  const overItems = data.alerts.filter((a) => a.status === 'over');
-  if (overItems.length > 0) {
-    bodyContents.push({
-      type: 'text',
-      text: '🔴 เกิน Target (ต้องตรวจสอบ)',
-      size: 'xs',
-      color: '#7F1D1D',
-      weight: 'bold'
-    });
-
-    overItems.forEach((item) => {
-      bodyContents.push(alertRow(item, '#B91C1C', '#FCEBEB', '#7F1D1D'));
-    });
+  // ── Section: สัปดาห์ปัจจุบัน ──
+  if (data.crossMonth) {
+    // คาบเดือน → มี label พิเศษ
+    bodyContents.push(sectionHeader(
+      '📊 สัปดาห์นี้',
+      data.week.displayRange,
+      '#1E40AF',
+      '#F0F9FF'
+    ));
   }
 
-  // ── ส่วนที่ 3: รายการใกล้ Target ──
-  const warningItems = data.alerts.filter((a) => a.status === 'warning');
-  if (warningItems.length > 0) {
-    bodyContents.push({
-      type: 'text',
-      text: '🟠 ใกล้ Target',
-      size: 'xs',
-      color: '#7C2D12',
-      weight: 'bold',
-      margin: 'md'
-    });
+  // เพิ่มสรุป + รายการของสัปดาห์
+  addSummarySection(bodyContents, data.week.summary, !data.crossMonth);
 
-    warningItems.forEach((item) => {
-      bodyContents.push(alertRow(item, '#C2410C', '#FFEDD5', '#7C2D12'));
-    });
+  // ── Section: ปิดเดือนก่อนหน้า (ถ้าคาบเดือน) ──
+  if (data.crossMonth && data.month) {
+    bodyContents.push({ type: 'separator', margin: 'lg' });
+
+    bodyContents.push(sectionHeader(
+      '📅 ปิดเดือน ' + data.month.monthLabel,
+      'รวมทั้งเดือน (1–' + data.month.daysInMonth + ' ' + data.month.monthLabel.split(' ')[0] + ')',
+      '#B45309',
+      '#FEF3C7'
+    ));
+
+    addSummarySection(bodyContents, data.month.summary, false);
   }
 
-  // ── ถ้าไม่มี alert เลย — ข้อความสวยๆ ──
-  if (data.alerts.length === 0) {
-    bodyContents.push({
-      type: 'box',
-      layout: 'vertical',
-      backgroundColor: '#EAF3DE',
-      cornerRadius: '8px',
-      paddingAll: '14px',
-      margin: 'md',
-      contents: [
-        {
-          type: 'text',
-          text: '🎉 ทุกแผนกผ่าน Target!',
-          size: 'sm',
-          weight: 'bold',
-          color: '#173404',
-          align: 'center'
-        },
-        {
-          type: 'text',
-          text: 'สัปดาห์นี้ทำได้ดีมาก',
-          size: 'xs',
-          color: '#3B6D11',
-          align: 'center',
-          margin: 'xs'
-        }
-      ]
-    });
-  }
+  // เลือกสี Header
+  const allAlerts = [
+    ...data.week.summary.filter((s) => s.status === 'over' || s.status === 'warning'),
+    ...(data.month?.summary?.filter((s) => s.status === 'over' || s.status === 'warning') || [])
+  ];
+  const overCount = allAlerts.filter((a) => a.status === 'over').length;
+  const warningCount = allAlerts.filter((a) => a.status === 'warning').length;
 
-  // ── ส่วนที่ 4: แผนกที่ไม่บันทึก ──
-  if (data.notReported.length > 0) {
-    bodyContents.push({
-      type: 'box',
-      layout: 'vertical',
-      backgroundColor: '#F5F5F5',
-      cornerRadius: '6px',
-      paddingAll: '10px',
-      margin: 'md',
-      contents: [
-        {
-          type: 'text',
-          text: '📌 แผนกที่ไม่มีข้อมูล',
-          size: 'xxs',
-          color: '#888888',
-          weight: 'bold'
-        },
-        {
-          type: 'text',
-          text: data.notReported.join(', '),
-          size: 'xs',
-          color: '#555555',
-          wrap: true,
-          margin: 'xs'
-        }
-      ]
-    });
-  }
+  const headerColor = overCount > 0 ? '#B91C1C'
+    : warningCount > 0 ? '#C2410C'
+    : '#1E40AF';
 
-  // เลือกสี Header ตามจำนวน alert
-  const headerColor = data.overCount > 0
-    ? '#B91C1C'  // มีเกิน Target → แดง
-    : data.warningCount > 0
-      ? '#C2410C'  // มีใกล้ Target → ส้ม
-      : '#1E40AF'; // ทุกอย่างผ่าน → น้ำเงิน
+  // ── Header ของ bubble ──
+  const headerSubtitle = data.crossMonth
+    ? `${data.week.displayRange} • ข้ามเดือน`
+    : data.week.displayRange;
 
   return {
     type: 'flex',
-    altText: `สรุปประจำสัปดาห์ ${data.displayRange} — เกิน Target ${data.overCount} แผนก`,
+    altText: `สรุปประจำสัปดาห์ ${data.week.displayRange}`,
     contents: {
       type: 'bubble',
       size: 'mega',
@@ -363,28 +325,9 @@ function buildWeeklyFlexMessage(data) {
         backgroundColor: headerColor,
         paddingAll: '14px',
         contents: [
-          {
-            type: 'text',
-            text: '📊 WEEKLY SUMMARY',
-            color: '#FFFFFF',
-            size: 'xs',
-            weight: 'bold'
-          },
-          {
-            type: 'text',
-            text: 'สรุปประจำสัปดาห์',
-            color: '#FFFFFF',
-            size: 'md',
-            weight: 'bold',
-            margin: 'sm'
-          },
-          {
-            type: 'text',
-            text: data.displayRange,
-            color: '#FFFFFF',
-            size: 'xs',
-            margin: 'xs'
-          }
+          { type: 'text', text: '📊 WEEKLY SUMMARY', color: '#FFFFFF', size: 'xs', weight: 'bold' },
+          { type: 'text', text: 'สรุปประจำสัปดาห์', color: '#FFFFFF', size: 'md', weight: 'bold', margin: 'sm' },
+          { type: 'text', text: headerSubtitle, color: '#FFFFFF', size: 'xs', margin: 'xs' }
         ]
       },
       body: {
@@ -398,38 +341,107 @@ function buildWeeklyFlexMessage(data) {
   };
 }
 
-function summaryBox(label, count, bgColor, labelColor, valueColor) {
+// Header แสดง section ใน body (สำหรับ cross-month)
+function sectionHeader(title, subtitle, accentColor, bgColor) {
   return {
     type: 'box',
     layout: 'vertical',
-    flex: 1,
     backgroundColor: bgColor,
-    cornerRadius: '8px',
-    paddingAll: '10px',
+    cornerRadius: '4px',
+    paddingAll: '8px',
     contents: [
-      {
-        type: 'text',
-        text: label,
-        size: 'xxs',
-        color: labelColor,
-        align: 'center'
-      },
-      {
-        type: 'text',
-        text: String(count),
-        size: 'xl',
-        weight: 'bold',
-        color: valueColor,
-        align: 'center',
-        margin: 'xs'
-      }
+      { type: 'text', text: title, size: 'sm', weight: 'bold', color: accentColor },
+      { type: 'text', text: subtitle, size: 'xxs', color: '#666666', margin: 'xs' }
     ]
   };
 }
 
-function alertRow(item, borderColor, bgColor, textColor) {
-  // คำนวณกี่เท่าของ Target
-  const overText = item.status === 'over'
+// เพิ่มส่วนสรุป (3 ช่อง + รายการเกิน/ใกล้)
+function addSummarySection(bodyContents, summary, isFullSection) {
+  const okCount = summary.filter((s) => s.status === 'ok').length;
+  const warningCount = summary.filter((s) => s.status === 'warning').length;
+  const overCount = summary.filter((s) => s.status === 'over').length;
+
+  // 3 ช่องสรุป
+  bodyContents.push({
+    type: 'box',
+    layout: 'horizontal',
+    spacing: 'sm',
+    margin: isFullSection ? 'none' : 'sm',
+    contents: [
+      summaryBox('ผ่าน', okCount, '#EAF3DE', '#3B6D11', '#173404'),
+      summaryBox('ใกล้ Target', warningCount, '#FFEDD5', '#C2410C', '#7C2D12'),
+      summaryBox('เกิน Target', overCount, '#FEE2E2', '#B91C1C', '#7F1D1D')
+    ]
+  });
+
+  // รายการเกิน + ใกล้ Target
+  const alerts = summary
+    .filter((s) => s.status === 'over' || s.status === 'warning')
+    .sort((a, b) => b.dfRatio - a.dfRatio);
+
+  if (alerts.length === 0) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#EAF3DE',
+      cornerRadius: '8px',
+      paddingAll: '10px',
+      margin: 'sm',
+      contents: [
+        { type: 'text', text: '🎉 ทุกแผนกผ่าน Target!', size: 'sm', weight: 'bold', color: '#173404', align: 'center' }
+      ]
+    });
+    return;
+  }
+
+  // เกิน Target
+  const overItems = alerts.filter((a) => a.status === 'over');
+  if (overItems.length > 0) {
+    bodyContents.push({
+      type: 'text',
+      text: '🔴 เกิน Target',
+      size: 'xs',
+      color: '#7F1D1D',
+      weight: 'bold',
+      margin: 'md'
+    });
+    overItems.forEach((item) => bodyContents.push(alertRow(item)));
+  }
+
+  // ใกล้ Target
+  const warningItems = alerts.filter((a) => a.status === 'warning');
+  if (warningItems.length > 0) {
+    bodyContents.push({
+      type: 'text',
+      text: '🟠 ใกล้ Target',
+      size: 'xs',
+      color: '#7C2D12',
+      weight: 'bold',
+      margin: 'md'
+    });
+    warningItems.forEach((item) => bodyContents.push(alertRow(item)));
+  }
+}
+
+function summaryBox(label, count, bgColor, labelColor, valueColor) {
+  return {
+    type: 'box', layout: 'vertical', flex: 1,
+    backgroundColor: bgColor, cornerRadius: '8px', paddingAll: '8px',
+    contents: [
+      { type: 'text', text: label, size: 'xxs', color: labelColor, align: 'center' },
+      { type: 'text', text: String(count), size: 'lg', weight: 'bold', color: valueColor, align: 'center', margin: 'xs' }
+    ]
+  };
+}
+
+function alertRow(item) {
+  const isOver = item.status === 'over';
+  const bgColor = isOver ? '#FCEBEB' : '#FFEDD5';
+  const textColor = isOver ? '#7F1D1D' : '#7C2D12';
+  const formulaNote = item.useFG ? ' • DF/FG' : '';
+
+  const overText = isOver
     ? ` (เกิน ${item.dfRatio.toFixed(2)}x)`
     : '';
 
@@ -439,29 +451,15 @@ function alertRow(item, borderColor, bgColor, textColor) {
     backgroundColor: bgColor,
     cornerRadius: '4px',
     paddingAll: '8px',
-    paddingStart: '12px',
+    paddingStart: '10px',
     margin: 'xs',
-    borderWidth: '0px',
     contents: [
       {
         type: 'box',
         layout: 'baseline',
         contents: [
-          {
-            type: 'text',
-            text: item.machine,
-            size: 'sm',
-            weight: 'bold',
-            color: '#222222',
-            flex: 0
-          },
-          {
-            type: 'text',
-            text: `  Target ${item.target}%`,
-            size: 'xxs',
-            color: '#888888',
-            flex: 1
-          }
+          { type: 'text', text: item.machine, size: 'sm', weight: 'bold', color: '#222222', flex: 0 },
+          { type: 'text', text: `  Target ${item.target}%${formulaNote}`, size: 'xxs', color: '#888888', flex: 1 }
         ]
       },
       {
@@ -476,25 +474,15 @@ function alertRow(item, borderColor, bgColor, textColor) {
   };
 }
 
-// ============================================================
-// Helper: ส่งข้อความเข้า LINE
-// ============================================================
 async function sendLineMessage(token, groupId, message) {
   const response = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      to: groupId,
-      messages: [message]
-    })
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: groupId, messages: [message] })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('LINE API response:', errorText);
     throw new Error(`LINE API error: ${response.status} - ${errorText}`);
   }
 
