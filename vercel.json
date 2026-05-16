@@ -1,8 +1,12 @@
 {
-  "crons": [
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [
     {
-      "path": "/api/weekly-summary",
-      "schedule": "30 0 * * 1"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
     }
   ]
 }
