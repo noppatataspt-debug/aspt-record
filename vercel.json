@@ -8,5 +8,11 @@
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/weekly-summary",
+      "schedule": "30 0 * * 1"
+    }
   ]
 }
