@@ -1,7 +1,8 @@
 // ============================================================
 // Vercel Serverless Function: LINE Production Notification
-// v2.9.1 - แก้สูตร %DF ของ Laminate / LAM-SHEET ให้ใช้ DF/FG
-//          (เครื่องอื่นยังใช้ DF/Output เหมือนเดิม)
+// v2.9.2 - real-time notification ใช้ DF/Output สำหรับทุกเครื่อง
+//          (รวมถึง Laminate / LAM-SHEET)
+//          ส่วน weekly-summary ใช้ DF/FG สำหรับ Laminate
 // ============================================================
 
 const MC_TARGETS = {
@@ -19,12 +20,6 @@ const MC_TARGETS = {
 };
 
 const DEFAULT_TARGET = 5;
-
-// ============================================================
-// เครื่องที่ใช้สูตร DF/FG แทน DF/Output
-// (Process laminate ยังไม่แยก → ถ้าใช้ Output จะนับงานเดิมซ้ำ)
-// ============================================================
-const USE_FG_AS_DENOMINATOR = ['Laminate', 'LAM-SHEET'];
 
 const ALERT_MULTIPLIER = 1.5;
 
@@ -166,21 +161,14 @@ function buildSummary(records) {
 
   const machineName = String(first.machine_name || '').trim();
 
-  // ⭐ NEW: เลือกตัวหารตามเครื่อง
-  // Laminate, LAM-SHEET → ใช้ FG  (กันการนับน้ำหนักงานเดิมซ้ำ)
-  // เครื่องอื่น → ใช้ Output
-  const useFG = USE_FG_AS_DENOMINATOR.includes(machineName);
-  const denominator = useFG ? fgTotal : outputTotal;
-
-  const dfPercent = denominator > 0
-    ? ((dfTotal / denominator) * 100).toFixed(2)
+  // ใช้ DF/Output สำหรับทุกเครื่อง (real-time view)
+  const dfPercent = outputTotal > 0
+    ? ((dfTotal / outputTotal) * 100).toFixed(2)
     : '0.00';
 
   const target = MC_TARGETS[machineName] !== undefined
     ? MC_TARGETS[machineName]
     : DEFAULT_TARGET;
-
-  console.log(`Machine: ${machineName} | Formula: ${useFG ? 'DF/FG' : 'DF/Output'} | %DF: ${dfPercent}%`);
 
   return {
     date: first.record_date || '',
@@ -195,8 +183,7 @@ function buildSummary(records) {
     dfPercent,
     dfDetails,
     target,
-    hasTarget: MC_TARGETS[machineName] !== undefined,
-    useFG  // ⭐ เก็บไว้ใช้ใน UI
+    hasTarget: MC_TARGETS[machineName] !== undefined
   };
 }
 
@@ -266,11 +253,9 @@ function metricBox(label, value, unit, bgColor, labelColor, valueColor) {
 }
 
 function dfBanner(s, status) {
-  // ⭐ บอก user ว่าใช้สูตรอะไร
-  const formulaNote = s.useFG ? 'DF/FG' : 'DF/Output';
   const subText = s.hasTarget
-    ? `Target ${s.target}% • ${status.label} • ${formulaNote}`
-    : `ไม่มี Target กำหนด • ${formulaNote}`;
+    ? `Target ${s.target}% • ${status.label}`
+    : 'ไม่มี Target กำหนด';
 
   return {
     type: 'box', layout: 'vertical',
