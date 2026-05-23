@@ -1852,7 +1852,7 @@ function goToReview() {
   // FG/OUTPUT WARNING — เตือนก่อนเข้าหน้า review
   // เงื่อนไข 1: ทุกเครื่อง — ถ้า Output = 0 → เตือน
   // เงื่อนไข 2: เครื่องในลิสต์ FG_WARN_MACHINES — ถ้า FG = 0 → เตือน
-  // ถ้าผู้ใช้ยืนยันใน modal → flag _skipFgWarnOnce ถูก set แล้วเรียก goToReview ซ้ำ
+  // ถ้าผู้ใช้ยืนยันใน modal → flag _fgWarnAcknowledged ถูก set แล้วเรียก goToReview ซ้ำ
   // ============================================================
   if (showFgOutputWarningIfNeeded()) return;
   
@@ -1973,7 +1973,8 @@ const FG_WARN_MACHINES = ['ตะวันออก','ตะวันตก','�
 // Called when user clicks "ยืนยันบันทึกต่อ" in FG/Output warning modal
 function proceedSubmitAfterFgWarn() {
   closeModal();
-  window._skipFgWarnOnce = true;  // skip FG warn check next call
+  // ใช้ flag ที่คงอยู่ข้ามหน้า review จนกว่าจะ submit เสร็จ หรือ reset ฟอร์ม
+  window._fgWarnAcknowledged = true;
   setTimeout(() => { goToReview(); }, 100);
 }
 
@@ -1997,9 +1998,8 @@ function checkMissingFgOutput() {
 
 // แสดง warning modal สำหรับ FG/Output ที่หาย — return true ถ้าแสดงและควร abort flow
 function showFgOutputWarningIfNeeded() {
-  if (window._skipFgWarnOnce) {
-    window._skipFgWarnOnce = false;
-    return false;  // user ยืนยันแล้ว ผ่านได้
+  if (window._fgWarnAcknowledged) {
+    return false;  // user ยืนยันแล้ว ผ่านได้ (flag คงอยู่จนกว่าจะ reset)
   }
   
   const c = checkMissingFgOutput();
@@ -2206,7 +2206,7 @@ async function doSubmit() {
   
   // ============================================================
   // FG/OUTPUT WARNING — safety net (ปกติเช็คตั้งแต่ goToReview แล้ว)
-  // ถ้าผู้ใช้ยืนยันใน modal แล้ว flag _skipFgWarnOnce จะถูก set
+  // ถ้าผู้ใช้ยืนยันใน modal แล้ว flag _fgWarnAcknowledged จะถูก set
   // ============================================================
   if (showFgOutputWarningIfNeeded()) return;
   
@@ -2434,6 +2434,8 @@ function resetForm() {
   state.values = {};
   state.product = '';
   state.products = [''];
+  // reset flag FG warning — ให้เตือนอีกครั้งในการบันทึกรอบถัดไป
+  window._fgWarnAcknowledged = false;
   renderProductsList();
   clearDraft();
   renderCounters();
