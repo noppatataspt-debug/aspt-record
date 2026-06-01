@@ -1125,6 +1125,8 @@ function renderProductsList(){
       let normalized = original.replace(/[a-wyz]/g, c => c.toUpperCase());
       // ถ้าพิมพ์ X ระหว่างตัวเลข/T → convert เป็น x (size separator)
       normalized = normalized.replace(/(\d|\.)X(\d|T)/g, '$1x$2');
+      // v9.8: normalize product token (SKIC*, -T, -<length>)
+      normalized = normalizeProductToken(normalized);
       if (normalized !== original) {
         const cursorPos = el.selectionStart;
         el.value = normalized;
@@ -1341,17 +1343,68 @@ function updateAcHighlight(idx){
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
+// === Product name normalization (v9.8) ===
+// รับ 1 token (ชื่อสินค้าเดี่ยว ไม่มี comma) → คืนชื่อที่ถูก format
+function normalizeProductToken(s) {
+  if (!s) return s;
+  let t = s.trim();
+
+  // Rule 1: SKIC* → SKIC-  (asterisk แทน dash เช่น SKIC*6750 → SKIC-6750)
+  t = t.replace(/\bSKIC\*/gi, 'SKIC-');
+
+  // Rule 2: -T ระหว่างตัวเลขกับ T → xT  (เช่น TPL-76-T10 → TPL-76xT10)
+  // pattern: digit หรือ . แล้วตามด้วย -T แล้วตามด้วย digit
+  t = t.replace(/(\d)-T(\d)/g, '$1xT$2');
+
+  // Rule 3: -<number> ที่เป็น suffix ความยาว → x<number>
+  // เช่น CP-76xT15-90 → CP-76xT15x90
+  // เงื่อนไข: มี xT อยู่ก่อนแล้ว (เพื่อกัน false positive กับ dash ปกติใน code เช่น MMP-78)
+  t = t.replace(/(xT\d+)-(\d+)/g, '$1x$2');
+
+  return t;
+}
+
+// ขยาย SKIC partial-number tokens: "SKIC-4400, 6750" → "SKIC-4400, SKIC-6750"
+// รับ array ของ tokens (หลัง split by comma) → คืน array ที่เติม prefix SKIC- ให้ครบ
+function expandSkicTokens(parts) {
+  // หา SKIC prefix ที่มีอยู่จริงใน parts นี้
+  const SKIC_PATTERN = /^(SKIC|TKIC|VKPC)-\d/i;
+  const lastSkicPrefix = (() => {
+    for (let i = 0; i < parts.length; i++) {
+      const m = parts[i].trim().match(/^(SKIC|TKIC|VKPC)(?=-\d)/i);
+      if (m) return m[1].toUpperCase();
+    }
+    return null;
+  })();
+
+  if (!lastSkicPrefix) return parts; // ไม่มี SKIC ใน group นี้ → skip
+
+  return parts.map(p => {
+    const trimmed = p.trim();
+    // ถ้าเป็นตัวเลขล้วน หรือ ตัวเลขกับ comma-space (หลุดมาจาก "SKIC-4400, 6750")
+    if (/^\d{4,}$/.test(trimmed)) {
+      return lastSkicPrefix + '-' + trimmed;
+    }
+    return trimmed;
+  });
+}
+
 // Sync state.products → state.product (join with ", ")
 // ให้ submit/display ใช้ต่อได้โดยไม่ต้องแก้ที่อื่น
 function syncProductLegacy(){
-  const clean = (state.products || []).map(p => (p || '').trim()).filter(p => p.length > 0);
+  const clean = (state.products || [])
+    .map(p => normalizeProductToken((p || '').trim()))
+    .filter(p => p.length > 0);
   state.product = clean.join(', ');
 }
 
 // Parse state.product → state.products (สำหรับ edit mode หรือ load draft)
+// v9.8: expand SKIC partial numbers + normalize each token
 function splitProductString(str){
   if (!str) return [''];
-  const parts = String(str).split(',').map(p => p.trim()).filter(p => p.length > 0);
+  let parts = String(str).split(',').map(p => p.trim()).filter(p => p.length > 0);
+  parts = expandSkicTokens(parts);           // "SKIC-4400, 6750" → "SKIC-4400, SKIC-6750"
+  parts = parts.map(normalizeProductToken);  // -T→xT, SKIC*→SKIC-, -90→x90
   return parts.length === 0 ? [''] : parts;
 }
 
