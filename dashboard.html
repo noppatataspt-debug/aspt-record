@@ -304,6 +304,9 @@ a.nb.nav-link-back:hover{background:rgba(37,99,235,.08);border-style:solid;borde
 .hm td:hover{opacity:.8;outline:1px solid rgba(255,255,255,.2)}
 .hm td.mc-n{text-align:left;font-family:"IBM Plex Sans Thai",sans-serif;font-weight:600;font-size:14px;border-left:3px solid var(--bdr);color:var(--text);padding-left:10px}
 .hm td.tg-c{color:var(--t3);font-size:12px}
+.hm tr.hm-overall td{border-top:2px solid var(--accent);font-weight:700}
+.hm tr.hm-overall td.mc-n{background:var(--accent);color:#0f1219;border-left-color:var(--accent)}
+[data-theme="light"] .hm tr.hm-overall td.mc-n{background:var(--accent) !important;color:#ffffff !important;border-left:3px solid var(--accent) !important}
 .leg{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .li{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--t2)}
 .ld{width:8px;height:8px;border-radius:2px;flex-shrink:0}
@@ -2650,6 +2653,19 @@ function buildHeatmap(){
     });
     tb1.appendChild(tr);
   });
+  // แถว Overall (รวมทุกเครื่อง) — ใช้ค่าเดียวกับ %Defect รายเดือน หน้าภาพรวม (YTY), เทียบ TG 4%
+  const ovTg = 4;
+  const trOv = document.createElement('tr');
+  trOv.className = 'hm-overall';
+  trOv.innerHTML = `<td class="mc-n">Overall</td><td class="tg-c">${ovTg}%</td>`;
+  allYms.forEach(ym=>{
+    const v = YTY[ym];
+    if (v === undefined || v === null){ trOv.innerHTML += `<td style="background:var(--s3);color:var(--t3)">—</td>`; return; }
+    const p = v/ovTg;
+    const bg=p>=1?`rgba(239,68,68,${Math.min(.9,.55+p*.15)})`:p>=.75?`rgba(245,158,11,${.45+p*.3})`:`rgba(34,197,94,${.25+p*.35})`;
+    trOv.innerHTML += `<td style="background:${bg};color:#fff" title="Overall ${MONTH_TH[ym]}: ${v.toFixed(2)}% (TG ${ovTg}%)">${v.toFixed(2)}</td>`;
+  });
+  tb1.appendChild(trOv);
   t1.appendChild(tb1);
   document.getElementById('hm-mc').innerHTML='';document.getElementById('hm-mc').appendChild(t1);
 
