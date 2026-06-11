@@ -615,6 +615,14 @@ canvas{width:100%!important}
 
 <!-- OVERVIEW -->
 <div class="page active" id="page-overview">
+<div class="ms-bar" id="ov-ms-bar">
+  <div class="ms-row">
+    <span class="ms-icon">📅</span>
+    <span class="ms-lbl">เดือนอ้างอิง:</span>
+    <div class="ms-btn-group" id="ov-ms-btn-group"></div>
+  </div>
+  <div class="ms-hint">💡 เลือกเดือนเพื่อดูภาพรวมย้อนหลัง · KPI · กราฟรายเครื่อง · ตารางสถานะ ใช้เดือนที่เลือก · กราฟรายวัน 30 วัน และ Year-to-Year แสดงครบทุกเดือนเสมอ</div>
+</div>
 <div class="main">
   <div class="krow" id="ov-kpis"></div>
   <div class="panel">
@@ -623,7 +631,7 @@ canvas{width:100%!important}
   </div>
   <div class="row2">
     <div class="panel">
-      <div class="pt">%Defect รายเครื่อง เม.ย.69 vs Target <span class="sub">DF/ของดี</span></div>
+      <div class="pt">%Defect รายเครื่อง <span id="ov-mcbar-month">เม.ย.69</span> vs Target <span class="sub">DF/ของดี</span></div>
       <div class="ch-wrap" style="height:260px"><canvas id="ch-mc-bar"></canvas></div>
     </div>
     <div class="panel">
@@ -632,7 +640,7 @@ canvas{width:100%!important}
     </div>
   </div>
   <div class="panel">
-    <div class="pt">%Defect Year to Year รายเดือน ก.พ.66–เม.ย.69 <span class="sub">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</span></div>
+    <div class="pt">%Defect Year to Year รายเดือน <span id="ov-yty-range">ก.พ.66–เม.ย.69</span> <span class="sub">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</span></div>
     <div class="leg" id="yty-leg"></div>
     <div class="ch-wrap" style="height:210px"><canvas id="ch-yty"></canvas></div>
   </div>
@@ -732,16 +740,16 @@ canvas{width:100%!important}
     <div id="insight-content"></div>
   </div>
   <div class="panel">
-    <div class="pt">Stacked Area — Trend ของเสียแต่ละประเภทรายเดือน <span class="sub">ก.พ.66–เม.ย.69 · ปัญหาไหนพุ่งขึ้นเดือนไหน</span></div>
+    <div class="pt">Stacked Area — Trend ของเสียแต่ละประเภทรายเดือน <span class="sub"><span class="mc-range">ก.พ.66–เม.ย.69</span> · ปัญหาไหนพุ่งขึ้นเดือนไหน</span></div>
     <div class="leg" id="stack-leg"></div>
     <div class="ch-wrap" style="height:260px"><canvas id="ch-stack"></canvas></div>
   </div>
   <div class="panel">
-    <div class="pt">Line Trend แยกประเภทของเสีย <span class="sub">ก.พ.66–เม.ย.69 · คลิก legend ซ่อน/แสดง · เส้นแดงประ = Target</span></div>
+    <div class="pt">Line Trend แยกประเภทของเสีย <span class="sub"><span class="mc-range">ก.พ.66–เม.ย.69</span> · คลิก legend ซ่อน/แสดง · เส้นแดงประ = Target</span></div>
     <div class="ch-wrap" style="height:240px"><canvas id="ch-lines"></canvas></div>
   </div>
   <div class="panel">
-    <div class="pt">%Defect รวมรายเดือน <span class="sub">ก.พ.66–เม.ย.69 · เส้นแดงประ = Target</span></div>
+    <div class="pt">%Defect รวมรายเดือน <span class="sub"><span class="mc-range">ก.พ.66–เม.ย.69</span> · เส้นแดงประ = Target</span></div>
     <div class="ch-wrap" style="height:200px"><canvas id="ch-mc-total"></canvas></div>
   </div>
 </div>
@@ -1061,30 +1069,68 @@ const xOpt=(rot=45)=>({grid:{display:false},ticks:{color:chartTextColor(),font:{
 const yOpt={grid:{color:chartGridColor()},ticks:{color:chartTextColor(),font:{size:11},callback:v=>v+'%'}};
 
 // ===== OVERVIEW =====
-function buildOverview(){
-  const ymKeys=Object.keys(YTY),lastYm=ymKeys.at(-1),lastPct=YTY[lastYm];
-  const lastDay=DAILY_TREND.at(-2);
+let selOvYm = null;
 
-  // คำนวณ %Defect vs Target ratio สำหรับทุกเครื่อง
-  const mcRatios = MACHINES.filter(mc=>MC_DATA[mc]?.length).map(mc=>{
-    const l=MC_DATA[mc].at(-1);
-    const tg=MC_TARGETS[mc];
-    return {mc, pct:l.pct, tg, ratio: l.pct/tg};
+function buildOverviewMonthSelector(){
+  const container = document.getElementById('ov-ms-btn-group');
+  if (!container) return;
+  const allYms = Object.keys(YTY).sort();
+  if (allYms.length === 0){
+    container.innerHTML = '<span style="color:var(--t3);font-size:13px">ยังไม่มีข้อมูล</span>';
+    return;
+  }
+  const recent6 = allYms.slice(-6);
+  const latestYm = recent6.at(-1);
+  if (selOvYm === null || !recent6.includes(selOvYm)) selOvYm = latestYm;
+  container.innerHTML = recent6.map(ym => {
+    const isLatest = ym === latestYm;
+    const isActive = ym === selOvYm;
+    const cls = 'ms-btn' + (isLatest ? ' latest' : '') + (isActive ? ' active' : '');
+    const suffix = isLatest ? ' (ล่าสุด)' : '';
+    return `<button class="${cls}" data-ym="${ym}">${MONTH_TH[ym]||ym}${suffix}</button>`;
+  }).join('');
+  container.querySelectorAll('.ms-btn').forEach(b => {
+    b.onclick = () => { selOvYm = b.dataset.ym; buildOverview(); };
   });
+}
 
+function buildOverview(){
+  const ymKeys = Object.keys(YTY).sort();
+  if (ymKeys.length === 0) return;
+  buildOverviewMonthSelector();
+  // เดือนอ้างอิง: ใช้เดือนที่เลือก (default = เดือนล่าสุดที่มีข้อมูล)
+  const refYm = (selOvYm && ymKeys.includes(selOvYm)) ? selOvYm : ymKeys.at(-1);
+  const refPct = YTY[refYm] ?? 0;
+  const refLbl = MONTH_TH[refYm] || refYm;
+  const lastDay = DAILY_TREND.at(-2);
+
+  // คำนวณ %Defect vs Target ratio สำหรับทุกเครื่อง — เฉพาะเดือนอ้างอิง
+  const mcRatios = MACHINES.filter(mc=>MC_DATA[mc]?.length).map(mc=>{
+    const entry = MC_DATA[mc].find(m => m.ym === refYm);
+    if (!entry) return null;
+    const tg = MC_TARGETS[mc];
+    return {mc, pct: entry.pct, tg, ratio: entry.pct/tg};
+  }).filter(Boolean);
+
+  const hasMC = mcRatios.length > 0;
   // สูงสุด = ratio สูงสุด (เกิน/ใกล้ target มากที่สุด)
-  const worst = mcRatios.reduce((a,b)=>b.ratio>a.ratio?b:a);
+  const worst = hasMC ? mcRatios.reduce((a,b)=>b.ratio>a.ratio?b:a) : null;
   // ต่ำสุด = ratio ต่ำสุด (ดีกว่า target มากที่สุด)
-  const best  = mcRatios.reduce((a,b)=>b.ratio<a.ratio?b:a);
+  const best  = hasMC ? mcRatios.reduce((a,b)=>b.ratio<a.ratio?b:a) : null;
+  const overMC = mcRatios.filter(x=>x.ratio>=1);
 
-  const overMC=mcRatios.filter(x=>x.ratio>=1);
+  // อัปเดตหัวข้อกราฟ/ช่วงเดือนให้เป็นเดือนจริง (ไม่ hardcode)
+  const mcbarMonthEl = document.getElementById('ov-mcbar-month');
+  if (mcbarMonthEl) mcbarMonthEl.textContent = refLbl;
+  const ytyRangeEl = document.getElementById('ov-yty-range');
+  if (ytyRangeEl) ytyRangeEl.textContent = `${MONTH_TH[ymKeys[0]]||ymKeys[0]}–${MONTH_TH[ymKeys.at(-1)]||ymKeys.at(-1)}`;
 
   document.getElementById('ov-kpis').innerHTML=`
     <div class="kpi"><div class="kl">%Defect รายวัน (${lastDay?.date.slice(5)})</div><div class="kv ok">${lastDay?.pct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป ทุกเครื่อง</div></div>
-    <div class="kpi"><div class="kl">%Defect รายเดือน (${MONTH_TH[lastYm]})</div><div class="kv ok">${lastPct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</div></div>
-    <div class="kpi ${overMC.length?'d':''}"><div class="kl">เครื่องเกิน Target</div><div class="kv ${overMC.length?'d':'ok'}">${overMC.length} เครื่อง</div><div class="ks">${overMC.map(x=>x.mc).slice(0,2).join(', ')||'ทุกเครื่องผ่าน'}</div></div>
-    <div class="kpi d"><div class="kl">สูงสุด vs Target (เม.ย.69)</div><div class="kv d" style="font-size:18px">${worst.mc}</div><div class="ks">${worst.pct.toFixed(2)}% vs TG ${worst.tg}% (${(worst.ratio*100).toFixed(0)}%)</div></div>
-    <div class="kpi b"><div class="kl">ต่ำสุด vs Target (เม.ย.69)</div><div class="kv ok" style="font-size:18px">${best.mc}</div><div class="ks">${best.pct.toFixed(2)}% vs TG ${best.tg}% (${(best.ratio*100).toFixed(0)}%)</div></div>`;
+    <div class="kpi"><div class="kl">%Defect รายเดือน (${refLbl})</div><div class="kv ok">${refPct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</div></div>
+    <div class="kpi ${overMC.length?'d':''}"><div class="kl">เครื่องเกิน Target (${refLbl})</div><div class="kv ${overMC.length?'d':'ok'}">${overMC.length} เครื่อง</div><div class="ks">${overMC.map(x=>x.mc).slice(0,2).join(', ')||'ทุกเครื่องผ่าน'}</div></div>
+    ${worst?`<div class="kpi d"><div class="kl">สูงสุด vs Target (${refLbl})</div><div class="kv d" style="font-size:18px">${worst.mc}</div><div class="ks">${worst.pct.toFixed(2)}% vs TG ${worst.tg}% (${(worst.ratio*100).toFixed(0)}%)</div></div>`:''}
+    ${best?`<div class="kpi b"><div class="kl">ต่ำสุด vs Target (${refLbl})</div><div class="kv ok" style="font-size:18px">${best.mc}</div><div class="ks">${best.pct.toFixed(2)}% vs TG ${best.tg}% (${(best.ratio*100).toFixed(0)}%)</div></div>`:''}`;
 
   kc('ch-daily');
   charts['ch-daily']=new Chart(document.getElementById('ch-daily'),{type:'line',data:{labels:DAILY_TREND.map(d=>d.date.slice(5)),datasets:[
@@ -1092,17 +1138,18 @@ function buildOverview(){
     {label:'Goal 4%',data:Array(DAILY_TREND.length).fill(4),borderColor:'#ef4444',borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:xOpt(45),y:{...yOpt,min:0,max:8}}}});
 
-  const mcs=MACHINES.filter(mc=>MC_DATA[mc]?.length);
-  const lastPcts=mcs.map(mc=>MC_DATA[mc].at(-1)?.pct||0);
-  const tgVals=mcs.map(mc=>MC_TARGETS[mc]);
-  const barColors=mcs.map((mc,i)=>lastPcts[i]>MC_TARGETS[mc]?'rgba(239,68,68,.8)':lastPcts[i]>MC_TARGETS[mc]*.75?'rgba(245,158,11,.7)':'rgba(34,197,94,.6)');
+  // กราฟแท่งรายเครื่อง — ใช้ค่าเดือนอ้างอิงที่เลือก
+  const mcs = mcRatios.map(x=>x.mc);
+  const refPcts = mcRatios.map(x=>x.pct);
+  const tgVals = mcRatios.map(x=>x.tg);
+  const barColors = mcRatios.map(x=> x.pct>x.tg?'rgba(239,68,68,.8)':x.pct>x.tg*.75?'rgba(245,158,11,.7)':'rgba(34,197,94,.6)');
   kc('ch-mc-bar');
   charts['ch-mc-bar']=new Chart(document.getElementById('ch-mc-bar'),{type:'bar',data:{labels:mcs,datasets:[
-    {label:'%Defect เม.ย.69',data:lastPcts,backgroundColor:barColors,borderRadius:3,borderWidth:0},
+    {label:`%Defect ${refLbl}`,data:refPcts,backgroundColor:barColors,borderRadius:3,borderWidth:0},
     {label:'Target',data:tgVals,type:'line',borderColor:'rgba(239,68,68,.7)',borderDash:[4,3],pointRadius:5,pointBackgroundColor:'rgba(239,68,68,.9)',borderWidth:1.5,fill:false}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:chartTextColor(),font:{size:11},boxWidth:10}}},scales:{x:xOpt(45),y:yOpt}}});
 
-  document.getElementById('ov-mc-body').innerHTML=mcRatios.sort((a,b)=>b.ratio-a.ratio).map(({mc,pct,tg,ratio})=>{
+  document.getElementById('ov-mc-body').innerHTML=mcRatios.slice().sort((a,b)=>b.ratio-a.ratio).map(({mc,pct,tg,ratio})=>{
     const p=+(ratio*100).toFixed(1);
     const cls=p>=100?'b-d':p>=75?'b-w':'b-ok';
     const lbl=p>=100?'เกิน Target':p>=75?'ใกล้ Target':'ผ่าน';
@@ -1298,6 +1345,11 @@ function buildMCCharts(){
   }
 
   const topTypes=pareto.slice(0,8).map(p=>p.type),labels=monthly.map(m=>MONTH_TH[m.ym]||m.ym);
+  // อัปเดตช่วงเดือนของกราฟ trend ให้ตรงกับข้อมูลจริงของเครื่องที่เลือก
+  if (monthly.length){
+    const rangeLbl = `${MONTH_TH[monthly[0].ym]||monthly[0].ym}–${MONTH_TH[monthly.at(-1).ym]||monthly.at(-1).ym}`;
+    document.querySelectorAll('.mc-range').forEach(el => el.textContent = rangeLbl);
+  }
   kc('ch-stack');
   charts['ch-stack']=new Chart(document.getElementById('ch-stack'),{type:'line',data:{labels,datasets:topTypes.map((t,i)=>({label:t,data:monthly.map(m=>m.types?.[t]||0),backgroundColor:COLORS[i%COLORS.length]+'99',borderColor:COLORS[i%COLORS.length],borderWidth:1,fill:true,tension:.3,pointRadius:0}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},scales:{x:xOpt(45),y:{...yOpt,stacked:true,min:0}}}});
   document.getElementById('stack-leg').innerHTML=topTypes.map((t,i)=>`<div class="li"><div class="ld" style="background:${COLORS[i%COLORS.length]}"></div>${t}</div>`).join('');
