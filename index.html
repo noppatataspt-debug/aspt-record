@@ -315,6 +315,14 @@ a.page-tab.nav-link:hover{background:var(--s2);border-style:solid;border-color:v
 .hist-pill strong{color:var(--blue)}
 .hist-pill.warn strong{color:var(--warn)}
 .hist-pill .miss{color:var(--t3);font-size:11px}
+/* ===== Daily overview summary (ของดี/FG/ของเสีย/%) ===== */
+.hist-daysum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.hist-daysum .ds-box{flex:1 1 0;min-width:80px;background:var(--s2);border:1px solid var(--bdr);border-radius:8px;padding:8px 6px;text-align:center}
+.hist-daysum .ds-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;line-height:1.2}
+.hist-daysum .ds-val{font-size:17px;font-weight:700;font-family:'IBM Plex Mono',monospace;line-height:1}
+.hist-daysum .ds-val.ok{color:var(--accent)}.hist-daysum .ds-val.fg{color:var(--blue)}.hist-daysum .ds-val.df{color:var(--danger)}
+.hist-daysum .ds-val.pct.ok{color:var(--accent)}.hist-daysum .ds-val.pct.warn{color:var(--warn)}.hist-daysum .ds-val.pct.bad{color:var(--danger)}.hist-daysum .ds-val.pct.muted{color:var(--t3)}
+[data-theme="light"] .hist-daysum .ds-box{background:#f8fafc;border-color:#e2e8f0}
 
 .hist-group-hdr{padding:8px 12px;margin:14px 0 6px;font-size:12px;color:var(--t2);font-weight:600;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center}
 .hist-group-hdr:first-child{margin-top:4px}
@@ -3090,7 +3098,24 @@ function renderHistory(records){
     }
   }
   
-  summary.innerHTML = '<div class="hist-pill ' + summaryCls + '">' +
+  // ===== สรุปภาพรวมประจำวัน: ของดี / ของดีสำเร็จรูป / ของเสีย / %ของเสีย =====
+  // %ของเสีย = DF ÷ FG (ของดีสำเร็จรูป) ให้ตรงกับ "%Defect ภาพรวมรายวัน" บน Dashboard
+  let dayOut = 0, dayFg = 0, dayDf = 0;
+  groupList.forEach(g => {
+    dayOut += g.outs.reduce((s,x) => s + x.qty, 0);
+    dayFg  += g.fgs.reduce((s,x) => s + x.qty, 0);
+    dayDf  += g.dfs.reduce((s,x) => s + x.qty, 0);
+  });
+  const dayPct = dayFg > 0 ? (dayDf / dayFg * 100) : 0;
+  const dayPctCls = dayFg <= 0 ? 'muted' : (dayPct > 4 ? 'bad' : dayPct >= 3 ? 'warn' : 'ok');
+  const daySumBox = '<div class="hist-daysum">' +
+    '<div class="ds-box"><div class="ds-lbl">ของดี</div><div class="ds-val ok">' + dayOut.toLocaleString() + '</div></div>' +
+    '<div class="ds-box"><div class="ds-lbl">ของดีสำเร็จรูป</div><div class="ds-val fg">' + dayFg.toLocaleString() + '</div></div>' +
+    '<div class="ds-box"><div class="ds-lbl">ของเสีย</div><div class="ds-val df">' + dayDf.toLocaleString() + '</div></div>' +
+    '<div class="ds-box"><div class="ds-lbl">% ของเสีย</div><div class="ds-val pct ' + dayPctCls + '">' + (dayFg > 0 ? dayPct.toFixed(2) + '%' : '—') + '</div></div>' +
+  '</div>';
+
+  summary.innerHTML = daySumBox + '<div class="hist-pill ' + summaryCls + '">' +
     '<span><strong>' + machinesInRecords.size + '/' + allMachines.length + ' เครื่อง</strong> · ' + groupList.length + ' บันทึก</span>' +
     (missingMcs.length > 0 ? '<span class="miss">⚠️ ขาด: ' + missingLbl + '</span>' : '<span class="miss">✓ ครบทุกเครื่อง</span>') +
     '</div>';

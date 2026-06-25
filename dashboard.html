@@ -629,7 +629,11 @@ canvas{width:100%!important}
 <div class="main">
   <div class="krow" id="ov-kpis"></div>
   <div class="panel">
-    <div class="pt">%Defect รายวัน — 30 วันล่าสุด <span class="sub">DF/ของดีสำเร็จรูป · เส้นแดงประ = 4%</span></div>
+    <div class="pt">%Defect รายวัน — 30 วันล่าสุด <span class="sub" id="ov-daily-sub">DF/ของดีสำเร็จรูป · เส้นแดงประ = 4%</span></div>
+    <div id="ov-daily-toggle" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="mcb active" data-dmode="pct" onclick="setOvDailyMode('pct',this)">% ของเสีย</button>
+      <button class="mcb" data-dmode="weight" onclick="setOvDailyMode('weight',this)">น้ำหนักของเสีย (DF)</button>
+    </div>
     <div class="ch-wrap" style="height:200px"><canvas id="ch-daily"></canvas></div>
   </div>
   <div class="row2">
@@ -720,6 +724,14 @@ canvas{width:100%!important}
 </div>
 <div class="main">
   <div class="krow" id="mc-kpis"></div>
+  <div class="panel">
+    <div class="pt">📈 Monitoring รายวัน — 30 วันล่าสุด <span class="sub" id="mc-daily-sub">เครื่องที่เลือก · ไว้สอบกลับข้อมูลรายวัน</span></div>
+    <div id="mc-daily-toggle" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="mcb active" data-dmode="pct" onclick="setMcDailyMode('pct',this)">% Defect รายวัน</button>
+      <button class="mcb" data-dmode="weight" onclick="setMcDailyMode('weight',this)">น้ำหนักของเสีย (DF)</button>
+    </div>
+    <div class="ch-wrap" style="height:220px"><canvas id="ch-mc-daily"></canvas></div>
+  </div>
   <div class="row2">
     <div class="panel">
       <div class="pt">Pareto — ประเภทของเสีย <span class="sub">เรียงมากไปน้อย + % สะสม</span></div>
@@ -1097,6 +1109,37 @@ function buildOverviewMonthSelector(){
   });
 }
 
+// ===== กราฟ %Defect รายวัน (overview) — สลับดู % หรือ น้ำหนักของเสีย =====
+let ovDailyMode = 'pct'; // 'pct' | 'weight'
+function setOvDailyMode(mode, btn){
+  ovDailyMode = mode;
+  if (btn){
+    document.querySelectorAll('#ov-daily-toggle .mcb').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  renderDailyChart();
+}
+function renderDailyChart(){
+  const el = document.getElementById('ch-daily');
+  if (!el) return;
+  const labels = DAILY_TREND.map(d => d.date.slice(5));
+  const subEl = document.getElementById('ov-daily-sub');
+  kc('ch-daily');
+  if (ovDailyMode === 'weight'){
+    // น้ำหนักของเสีย (DF) รายวัน — ไว้สอบกลับตัวเลขของเสียแต่ละแผนก
+    if (subEl) subEl.textContent = 'น้ำหนักของเสีย (DF) รวมทุกเครื่อง · ไว้สอบกลับข้อมูล';
+    charts['ch-daily'] = new Chart(el, {type:'bar', data:{labels, datasets:[
+      {label:'น้ำหนักของเสีย (DF)', data:DAILY_TREND.map(d=>d.df), backgroundColor:'rgba(239,68,68,.55)', borderColor:'#ef4444', borderWidth:1, borderRadius:3}
+    ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'ของเสีย: '+Math.round(c.parsed.y).toLocaleString()}}},scales:{x:xOpt(45),y:{grid:{color:chartGridColor()},ticks:{color:chartTextColor(),font:{size:11},callback:v=>Number(v).toLocaleString()},min:0}}}});
+  } else {
+    if (subEl) subEl.textContent = 'DF/ของดีสำเร็จรูป · เส้นแดงประ = 4%';
+    charts['ch-daily'] = new Chart(el, {type:'line', data:{labels, datasets:[
+      {label:'%Defect รายวัน', data:DAILY_TREND.map(d=>d.pct), borderColor:'#4e9fff', backgroundColor:'rgba(78,159,255,.08)', pointRadius:4, tension:.3, fill:true, borderWidth:2},
+      {label:'Goal 4%', data:Array(DAILY_TREND.length).fill(4), borderColor:'#ef4444', borderDash:[5,4], pointRadius:0, borderWidth:1.5, fill:false}
+    ]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:xOpt(45),y:{...yOpt,min:0,max:8}}}});
+  }
+}
+
 function buildOverview(){
   const ymKeys = Object.keys(YTY).sort();
   if (ymKeys.length === 0) return;
@@ -1128,18 +1171,20 @@ function buildOverview(){
   const ytyRangeEl = document.getElementById('ov-yty-range');
   if (ytyRangeEl) ytyRangeEl.textContent = `${MONTH_TH[ymKeys[0]]||ymKeys[0]}–${MONTH_TH[ymKeys.at(-1)]||ymKeys.at(-1)}`;
 
+  // %Defect รายวัน / รายเดือน: เกิน 4% = แดง, 3–4% = ส้ม, ต่ำกว่า 3% = เขียว
+  const dayPctVal = lastDay?.pct ?? 0;
+  const dayCardCls = dayPctVal > 4 ? 'd' : dayPctVal >= 3 ? 'w' : 'ok';
+  const monPctVal = refPct ?? 0;
+  const monCardCls = monPctVal > 4 ? 'd' : monPctVal >= 3 ? 'w' : 'ok';
+
   document.getElementById('ov-kpis').innerHTML=`
-    <div class="kpi"><div class="kl">%Defect รายวัน (${lastDay?.date.slice(5)})</div><div class="kv ok">${lastDay?.pct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป ทุกเครื่อง</div></div>
-    <div class="kpi"><div class="kl">%Defect รายเดือน (${refLbl})</div><div class="kv ok">${refPct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</div></div>
+    <div class="kpi ${dayCardCls}"><div class="kl">%Defect รายวัน (${lastDay?.date.slice(5)})</div><div class="kv ${dayCardCls}">${lastDay?.pct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป ทุกเครื่อง</div></div>
+    <div class="kpi ${monCardCls}"><div class="kl">%Defect รายเดือน (${refLbl})</div><div class="kv ${monCardCls}">${refPct.toFixed(2)}%</div><div class="ks">DF/ของดีสำเร็จรูป รวมทุกเครื่อง (เหมือนรายวัน)</div></div>
     <div class="kpi ${overMC.length?'d':''}"><div class="kl">เครื่องเกิน Target (${refLbl})</div><div class="kv ${overMC.length?'d':'ok'}">${overMC.length} เครื่อง</div><div class="ks">${overMC.map(x=>x.mc).slice(0,2).join(', ')||'ทุกเครื่องผ่าน'}</div></div>
     ${worst?`<div class="kpi d"><div class="kl">สูงสุด vs Target (${refLbl})</div><div class="kv d" style="font-size:18px">${worst.mc}</div><div class="ks">${worst.pct.toFixed(2)}% vs TG ${worst.tg}% (${(worst.ratio*100).toFixed(0)}%)</div></div>`:''}
     ${best?`<div class="kpi b"><div class="kl">ต่ำสุด vs Target (${refLbl})</div><div class="kv ok" style="font-size:18px">${best.mc}</div><div class="ks">${best.pct.toFixed(2)}% vs TG ${best.tg}% (${(best.ratio*100).toFixed(0)}%)</div></div>`:''}`;
 
-  kc('ch-daily');
-  charts['ch-daily']=new Chart(document.getElementById('ch-daily'),{type:'line',data:{labels:DAILY_TREND.map(d=>d.date.slice(5)),datasets:[
-    {label:'%Defect รายวัน',data:DAILY_TREND.map(d=>d.pct),borderColor:'#4e9fff',backgroundColor:'rgba(78,159,255,.08)',pointRadius:4,tension:.3,fill:true,borderWidth:2},
-    {label:'Goal 4%',data:Array(DAILY_TREND.length).fill(4),borderColor:'#ef4444',borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:xOpt(45),y:{...yOpt,min:0,max:8}}}});
+  renderDailyChart();
 
   // กราฟแท่งรายเครื่อง — ใช้ค่าเดือนอ้างอิงที่เลือก
   const mcs = mcRatios.map(x=>x.mc);
@@ -1219,6 +1264,68 @@ function buildMCBar(){
     bar.appendChild(b);
   });
 }
+// ===== Monitoring รายวันต่อเครื่อง — %Defect / น้ำหนักของเสีย 30 วันล่าสุด =====
+let mcDailyMode = 'pct'; // 'pct' | 'weight'
+function setMcDailyMode(mode, btn){
+  mcDailyMode = mode;
+  if (btn){
+    document.querySelectorAll('#mc-daily-toggle .mcb').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  buildMCDailyChart();
+}
+function buildMCDailyChart(){
+  const el = document.getElementById('ch-mc-daily');
+  if (!el) return;
+  const tg = MC_TARGETS[selMC] || 4;
+  const isLam = (selMC === 'Laminate'); // Laminate = DF/FG, เครื่องอื่น = DF/Output
+  const subEl = document.getElementById('mc-daily-sub');
+
+  // รวมข้อมูลรายวันของเครื่องที่เลือก จาก v_product_output + v_product_df (per-product → รวมต่อวัน)
+  const dayMap = {};
+  PRODUCT_OUTPUT_DATA.forEach(r => {
+    if (r.machine_name !== selMC) return;
+    const d = r.record_date;
+    if (!dayMap[d]) dayMap[d] = { output:0, df:0, fg:0 };
+    dayMap[d].output += Number(r.output_qty) || 0;
+    if (r.fg_qty !== undefined) dayMap[d].fg += Number(r.fg_qty) || 0;
+  });
+  PRODUCT_DF_DATA.forEach(r => {
+    if (r.machine_name !== selMC) return;
+    const d = r.record_date;
+    if (!dayMap[d]) dayMap[d] = { output:0, df:0, fg:0 };
+    dayMap[d].df += Number(r.df_qty) || 0;
+  });
+
+  const days = Object.keys(dayMap).sort().slice(-30); // 30 วันล่าสุดที่มีบันทึก
+  const labels = days.map(d => { const p = d.split('-'); return `${p[2]}/${p[1]}`; });
+
+  kc('ch-mc-daily');
+  if (days.length === 0){
+    if (subEl) subEl.textContent = `${selMC} · ไม่มีข้อมูลรายวัน`;
+    charts['ch-mc-daily'] = new Chart(el, {type:'line',data:{labels:[],datasets:[]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    return;
+  }
+
+  if (mcDailyMode === 'weight'){
+    if (subEl) subEl.textContent = `${selMC} · น้ำหนักของเสีย (DF) รายวัน · ไว้สอบกลับข้อมูล`;
+    charts['ch-mc-daily'] = new Chart(el, {type:'bar',data:{labels,datasets:[
+      {label:'น้ำหนักของเสีย (DF)', data:days.map(d=>dayMap[d].df), backgroundColor:'rgba(239,68,68,.55)', borderColor:'#ef4444', borderWidth:1, borderRadius:3}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'ของเสีย: '+Math.round(c.parsed.y).toLocaleString()}}},scales:{x:xOpt(45),y:{grid:{color:chartGridColor()},ticks:{color:chartTextColor(),font:{size:11},callback:v=>Number(v).toLocaleString()},min:0}}}});
+  } else {
+    if (subEl) subEl.textContent = `${selMC} · %Defect รายวัน (${isLam?'DF÷FG':'DF÷Output'}) · เส้นแดงประ = Target ${tg}%`;
+    const pcts = days.map(d => {
+      const x = dayMap[d];
+      const denom = isLam ? x.fg : x.output;
+      return denom > 0 ? +(x.df/denom*100).toFixed(2) : 0;
+    });
+    charts['ch-mc-daily'] = new Chart(el, {type:'line',data:{labels,datasets:[
+      {label:'%Defect รายวัน', data:pcts, borderColor:'#4e9fff', backgroundColor:'rgba(78,159,255,.08)', pointRadius:3, tension:.3, fill:true, borderWidth:2},
+      {label:`Target ${tg}%`, data:Array(days.length).fill(tg), borderColor:'#ef4444', borderDash:[5,4], pointRadius:0, borderWidth:1.5, fill:false}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:xOpt(45),y:{...yOpt,min:0}}}});
+  }
+}
+
 function buildMCCharts(){
   const monthly=MC_DATA[selMC]||[],pareto=MC_PARETO[selMC]||[],tg=MC_TARGETS[selMC]||4;
   
@@ -1287,6 +1394,9 @@ function buildMCCharts(){
     ${latestDayHTML}
     <div class="kpi b"><div class="kl">ปัญหาหลัก #1</div><div class="kv n">${pareto[0]?.type||'-'}</div><div class="ks">${pareto[0]?.ratio.toFixed(3)||0}% ratio</div></div>
     <div class="kpi b"><div class="kl">ปัญหาหลัก #2</div><div class="kv n">${pareto[1]?.type||'-'}</div><div class="ks">${pareto[1]?.ratio.toFixed(3)||0}% ratio</div></div>`;
+
+  // กราฟ monitoring รายวันของเครื่องนี้ (30 วันล่าสุด)
+  buildMCDailyChart();
 
   // Pareto — เดือนที่เลือก (selYm) / ทั้งหมด
   var paretoAll    = MC_PARETO[selMC]||[];
