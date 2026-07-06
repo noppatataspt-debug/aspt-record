@@ -904,7 +904,9 @@ const PP_RANGES = [
   {months: 12, label: '12 เดือน'}
 ];
 
-const MC_TARGETS = {"บ้านหว้า 1":7,"บ้านหว้า 2":3,"ไฮเทค":1.45,"โรจนะ":1.65,"บางนา":3,"ตะวันออก":3.3,"ตะวันตก":4.5,"SL":0.05,"VB":3.3,"Laminate":20,"LAM-SHEET":3};
+// ค่า default นี้ใช้เฉพาะตอนโหลดจาก Supabase (department_targets) ไม่สำเร็จเท่านั้น
+// ค่าจริงที่ใช้งานจริงจะถูกดึงมาทับจากตาราง department_targets ทุกครั้งที่ refresh (ดู loadTargets())
+const MC_TARGETS = {"บ้านหว้า 1":7,"บ้านหว้า 2":4.5,"ไฮเทค":1.45,"โรจนะ":1.65,"บางนา":3,"ตะวันออก":3.3,"ตะวันตก":4.5,"SL":0.04,"VB":3.3,"Laminate":20,"LAM-SHEET":3};
 const MACHINES = ['บ้านหว้า 1','บ้านหว้า 2','ไฮเทค','โรจนะ','บางนา','ตะวันออก','ตะวันตก','SL','VB','Laminate','LAM-SHEET'];
 const COLORS   = ['#4e9fff','#00c9a7','#f59e0b','#ef4444','#a78bfa','#ec4899','#06b6d4','#84cc16','#f97316','#e11d48','#0ea5e9','#8b5cf6'];
 
@@ -945,7 +947,22 @@ async function sbGet(path) {
   return all;
 }
 
+async function loadTargets() {
+  // ดึง %Defect Target ล่าสุดจากตาราง department_targets แทนค่า hardcode
+  try {
+    const rows = await sbGet('/department_targets?select=dept_name,target_pct');
+    rows.forEach(r => {
+      if (r.dept_name in MC_TARGETS) MC_TARGETS[r.dept_name] = Number(r.target_pct);
+    });
+  } catch (e) {
+    console.warn('โหลด department_targets ไม่สำเร็จ ใช้ค่า default แทน:', e);
+  }
+}
+
 async function loadAllData() {
+  // 0. Target %Defect รายแผนก (โหลดก่อนเสมอ เพื่อให้กราฟ/การ์ดใช้ค่าล่าสุด)
+  await loadTargets();
+
   // 1. Daily Summary (30 วันล่าสุด)
   const dailyRaw = await sbGet('/v_daily_summary?order=record_date.desc&limit=35');
   DAILY_TREND = dailyRaw.reverse().map(d => ({
