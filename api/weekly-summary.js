@@ -11,21 +11,41 @@
 // 2. รองรับสัปดาห์คาบเดือน (เพิ่ม section "ปิดเดือนก่อน")
 // ============================================================
 
-const MC_TARGETS = {
+// ค่า default นี้ใช้เฉพาะกรณีดึงจากตาราง department_targets ใน Supabase ไม่สำเร็จเท่านั้น
+// ค่าจริงจะดึงจากตาราง department_targets ทุกครั้งที่มีการเรียก (ดู fetchTargets())
+const FALLBACK_TARGETS = {
   'บ้านหว้า 1': 7,
-  'บ้านหว้า 2': 3,
+  'บ้านหว้า 2': 4.5,
   'ไฮเทค': 1.45,
   'โรจนะ': 1.65,
   'บางนา': 3,
   'ตะวันออก': 3.3,
   'ตะวันตก': 4.5,
-  'SL': 0.05,
+  'SL': 0.04,
   'VB': 3.3,
   'Laminate': 20,
   'LAM-SHEET': 3
 };
 
 const DEFAULT_TARGET = 5;
+
+// ดึง target ล่าสุดจากตาราง department_targets; ถ้าดึงไม่สำเร็จ ใช้ FALLBACK_TARGETS แทน
+async function fetchTargets(supabaseUrl, supabaseKey) {
+  try {
+    const url = `${supabaseUrl}/rest/v1/department_targets?select=dept_name,target_pct`;
+    const response = await fetch(url, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rows = await response.json();
+    const targets = { ...FALLBACK_TARGETS };
+    rows.forEach(r => { targets[r.dept_name] = Number(r.target_pct); });
+    return targets;
+  } catch (e) {
+    console.warn('โหลด department_targets ไม่สำเร็จ ใช้ FALLBACK_TARGETS แทน:', e.message);
+    return { ...FALLBACK_TARGETS };
+  }
+}
 const USE_FG_AS_DENOMINATOR = ['Laminate', 'LAM-SHEET'];
 
 const MONTHS_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -65,9 +85,12 @@ export default async function handler(req, res) {
       console.log(`Month records: ${monthRecords.length}`);
     }
 
+    // ดึง Target %Defect ล่าสุดของแต่ละแผนก (ครั้งเดียว ใช้ร่วมกันทั้งสัปดาห์/เดือน)
+    const MC_TARGETS = await fetchTargets(SUPABASE_URL, SUPABASE_KEY);
+
     // สรุปข้อมูล
-    const weekSummary = summarizeByMachine(weekRecords);
-    const monthSummary = crossMonth ? summarizeByMachine(monthRecords) : null;
+    const weekSummary = summarizeByMachine(weekRecords, MC_TARGETS);
+    const monthSummary = crossMonth ? summarizeByMachine(monthRecords, MC_TARGETS) : null;
 
     // สร้าง message
     const flexMessage = buildWeeklyFlexMessage({
@@ -202,7 +225,7 @@ async function fetchRecords(supabaseUrl, supabaseKey, startDate, endDate) {
 //   Laminate, LAM-SHEET → DF/FG
 //   เครื่องอื่น → DF/Output
 // ============================================================
-function summarizeByMachine(records) {
+function summarizeByMachine(records, MC_TARGETS) {
   const groups = {};
 
   records.forEach((r) => {

@@ -5,21 +5,41 @@
 //          ส่วน weekly-summary ใช้ DF/FG สำหรับ Laminate
 // ============================================================
 
-const MC_TARGETS = {
+// ค่า default นี้ใช้เฉพาะกรณีดึงจากตาราง department_targets ใน Supabase ไม่สำเร็จเท่านั้น
+// ค่าจริงจะดึงจากตาราง department_targets ทุกครั้งที่มีการเรียก (ดู fetchTargets())
+const FALLBACK_TARGETS = {
   'บ้านหว้า 1': 7,
-  'บ้านหว้า 2': 3,
+  'บ้านหว้า 2': 4.5,
   'ไฮเทค': 1.45,
   'โรจนะ': 1.65,
   'บางนา': 3,
   'ตะวันออก': 3.3,
   'ตะวันตก': 4.5,
-  'SL': 0.05,
+  'SL': 0.04,
   'VB': 3.3,
   'Laminate': 20,
   'LAM-SHEET': 3
 };
 
 const DEFAULT_TARGET = 5;
+
+// ดึง target ล่าสุดจากตาราง department_targets; ถ้าดึงไม่สำเร็จ ใช้ FALLBACK_TARGETS แทน
+async function fetchTargets(supabaseUrl, supabaseKey) {
+  try {
+    const url = `${supabaseUrl}/rest/v1/department_targets?select=dept_name,target_pct`;
+    const response = await fetch(url, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rows = await response.json();
+    const targets = { ...FALLBACK_TARGETS };
+    rows.forEach(r => { targets[r.dept_name] = Number(r.target_pct); });
+    return targets;
+  } catch (e) {
+    console.warn('โหลด department_targets ไม่สำเร็จ ใช้ FALLBACK_TARGETS แทน:', e.message);
+    return { ...FALLBACK_TARGETS };
+  }
+}
 
 const ALERT_MULTIPLIER = 1.5;
 
@@ -83,7 +103,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'Skipped (not first record of submission)' });
     }
 
-    const summary = buildSummary(allRecords);
+    const MC_TARGETS = await fetchTargets(SUPABASE_URL, SUPABASE_KEY);
+    const summary = buildSummary(allRecords, MC_TARGETS);
     console.log('Summary:', JSON.stringify(summary));
 
     const isAlertLevel = summary.hasTarget &&
@@ -129,7 +150,7 @@ async function fetchSubmissionRecords(supabaseUrl, supabaseKey, submissionId) {
   return await response.json();
 }
 
-function buildSummary(records) {
+function buildSummary(records, MC_TARGETS) {
   const first = records[0];
 
   let outputTotal = 0;
