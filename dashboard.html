@@ -918,12 +918,17 @@ let YTY = {};
 let DAILY_TREND = [];
 let HM30 = {heatmap_30d:{}, sorted_types:[], date_from:'', date_to:'', days:30};
 
+function getDashSessionToken() {
+  try { return localStorage.getItem('aspt_dash_session') || ''; } catch(e) { return ''; }
+}
+
 async function sbGet(path) {
   // Supabase default limit = 1000; ถ้าขอมากกว่านั้นต้องใช้ Range header (pagination)
   const headers = {
     'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + SUPABASE_KEY,
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'x-session-token': getDashSessionToken()
   };
   const PAGE = 1000;
   let all = [];
@@ -2834,15 +2839,11 @@ function buildHeatmap(){
 // ============================================================
 
 // ============================================================
-// Login / Logout (Password Gate)
+// Login / Logout (Server-verified PIN + session token)
+// รหัสผ่าน (PIN) ไม่ถูกเก็บหรือเทียบในฝั่ง browser อีกต่อไป —
+// ตรวจสอบผ่าน RPC verify_dashboard_pin() ในฝั่ง Supabase เท่านั้น
+// และข้อมูลทุกอย่างในหน้านี้ถูกล็อคไว้ในระดับ view/RLS ด้วย session token นี้
 // ============================================================
-const DASHBOARD_PASSWORD_HASH = '888df25ae35772424a560c7152a1de794440e0ea5cfee62828333a456a506e05'; // SHA-256 of "9999"
-
-async function sha256(str){
-  const buf = new TextEncoder().encode(str);
-  const hash = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
 
 async function doLogin(){
   const input = document.getElementById('loginInput');
@@ -2850,17 +2851,36 @@ async function doLogin(){
   const btn = document.getElementById('loginBtn');
   const pw = input.value.trim();
   if (!pw) { input.focus(); return; }
-  
+
   btn.disabled = true;
   btn.textContent = 'กำลังตรวจสอบ...';
-  
+  err.classList.remove('show');
+
   try {
-    const hash = await sha256(pw);
-    if (hash === DASHBOARD_PASSWORD_HASH) {
-      try { localStorage.setItem('aspt_dash_auth', hash); } catch(e) {}
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/verify_dashboard_pin', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_pin: pw })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    const result = Array.isArray(rows) ? rows[0] : rows;
+
+    if (result && result.success && result.session_token) {
+      try { localStorage.setItem('aspt_dash_session', result.session_token); } catch(e) {}
       document.getElementById('loginGate').classList.add('hide');
       err.classList.remove('show');
+      input.value = '';
+      refreshData(false);
+    } else if (result && result.lockout_seconds > 0) {
+      err.textContent = `ลองผิดหลายครั้งเกินไป กรุณารอ ${result.lockout_seconds} วินาที`;
+      err.classList.add('show');
     } else {
+      err.textContent = (result && result.message) || 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่';
       err.classList.add('show');
       input.value = '';
       input.focus();
@@ -2876,17 +2896,18 @@ async function doLogin(){
 
 function doLogout(){
   if (!confirm('ออกจากระบบ Dashboard?')) return;
-  try { localStorage.removeItem('aspt_dash_auth'); } catch(e) {}
+  try { localStorage.removeItem('aspt_dash_session'); } catch(e) {}
   document.getElementById('loginGate').classList.remove('hide');
   document.getElementById('loginInput').value = '';
   document.getElementById('loginInput').focus();
 }
 
-// Check auth on load
+// Check auth on load: มี token เก็บไว้ไหม (การันตีจริงอยู่ที่ server/view เสมอ
+// ต่อให้ token ปลอมหรือหมดอายุ view จะไม่คืนข้อมูลใดๆ มาอยู่ดี)
 (function checkAuth(){
   try {
-    const saved = localStorage.getItem('aspt_dash_auth');
-    if (saved === DASHBOARD_PASSWORD_HASH) {
+    const saved = getDashSessionToken();
+    if (saved) {
       document.getElementById('loginGate').classList.add('hide');
     }
   } catch(e) {}
@@ -3067,7 +3088,7 @@ document.head.appendChild(style);
     <div class="login-err" id="loginErr">รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่</div>
     <input type="password" class="login-input" id="loginInput" placeholder="รหัสผ่าน" autofocus>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
-    <div class="login-footer">ASPT Production System · v23</div>
+    <div class="login-footer">ASPT Production System · v24-secure</div>
   </div>
 </div>
 
