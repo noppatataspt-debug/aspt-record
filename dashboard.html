@@ -740,8 +740,9 @@ canvas{width:100%!important}
       <div class="p-wrap" id="mc-pareto"></div>
     </div>
     <div class="panel">
-      <div class="pt">Month-over-Month <span class="sub">เทียบเดือนนี้ vs เดือนก่อน</span></div>
-      <table class="mom"><thead><tr><th>ประเภท</th><th>ล่าสุด</th><th>ก่อนหน้า</th><th>% เปลี่ยน</th></tr></thead><tbody id="mc-mom"></tbody></table>
+      <div class="pt">Month-over-Month <span class="sub" id="mc-mom-sub">เทียบเดือนนี้ vs เดือนก่อน</span></div>
+      <div id="mom-mode-toggle" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <table class="mom"><thead><tr><th>ประเภท</th><th>ล่าสุด</th><th id="mc-mom-th-prev">ก่อนหน้า</th><th>% เปลี่ยน</th></tr></thead><tbody id="mc-mom"></tbody></table>
     </div>
   </div>
   <div class="panel">
@@ -1236,6 +1237,44 @@ function buildOverview(){
 // ===== MACHINE =====
 let selMC='บ้านหว้า 1';
 let selYm = null;
+// โหมดเทียบ Month-over-Month: 'kpi' = เทียบกับเดือนล่าสุดที่ผ่าน KPI ของตัวเอง (default)
+// 'prev' = เทียบกับเดือนก่อนหน้าแบบเดิม (ปฏิทิน)
+let momMode = 'kpi';
+
+// หาเดือนอ้างอิงสำหรับเทียบ MoM ตาม momMode ปัจจุบัน
+// monthly: array ของ {ym, pct, types...} เรียงจากเก่า->ใหม่, idx: index ของเดือนล่าสุดที่เลือก (last), tg: target % ของเครื่อง/แผนกนั้น
+// คืนค่า {ref, usedFallback} — usedFallback=true เมื่อขอ 'kpi' แต่ไม่มีเดือนไหนผ่าน KPI เลย เลยใช้เดือนก่อนหน้าแทน
+function findMomBaseline(monthly, idx, tg){
+  if (idx <= 0) return { ref: null, usedFallback: false };
+  if (momMode === 'prev') {
+    return { ref: monthly[idx - 1], usedFallback: false };
+  }
+  // momMode === 'kpi': ไล่ย้อนจากเดือนก่อนเดือนที่เลือก หาเดือนแรกที่ %Defect <= Target
+  for (let i = idx - 1; i >= 0; i--) {
+    if (monthly[i].pct <= tg) {
+      return { ref: monthly[i], usedFallback: false };
+    }
+  }
+  // ไม่มีเดือนไหนผ่าน KPI เลย -> fallback เป็นเดือนก่อนหน้า
+  return { ref: monthly[idx - 1], usedFallback: true };
+}
+
+function setMomMode(mode){
+  if (momMode === mode) return;
+  momMode = mode;
+  renderMomModeToggle();
+  if (typeof buildMCCharts === 'function') buildMCCharts();
+}
+
+function renderMomModeToggle(){
+  const html = `
+    <button class="mcb${momMode==='kpi'?' active':''}" onclick="setMomMode('kpi')">เทียบเดือนที่ผ่าน KPI</button>
+    <button class="mcb${momMode==='prev'?' active':''}" onclick="setMomMode('prev')">เทียบเดือนก่อนหน้า</button>`;
+  const c1 = document.getElementById('mom-mode-toggle');
+  if (c1) c1.innerHTML = html;
+  const c2 = document.getElementById('insight-mom-mode-toggle');
+  if (c2) c2.innerHTML = html;
+}
 
 const MONTH_TH_LBL = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 function fmtYmShort(ym){
@@ -1352,21 +1391,35 @@ function buildMCCharts(){
   const monthly=MC_DATA[selMC]||[],pareto=MC_PARETO[selMC]||[],tg=MC_TARGETS[selMC]||4;
   
   buildMonthSelector();
-  let last, prev;
+  renderMomModeToggle();
+  let last, prev, lastIdx = -1, momFallback = false;
   if (selYm) {
-    const idx = monthly.findIndex(m => m.ym === selYm);
-    if (idx >= 0) {
-      last = monthly[idx];
-      prev = idx > 0 ? monthly[idx - 1] : null;
-    }
+    lastIdx = monthly.findIndex(m => m.ym === selYm);
   }
-  if (!last) {
-    last = monthly.at(-1);
-    prev = monthly.at(-2);
+  if (lastIdx < 0) {
+    lastIdx = monthly.length - 1;
+  }
+  last = lastIdx >= 0 ? monthly[lastIdx] : null;
+  if (last) {
+    const baseline = findMomBaseline(monthly, lastIdx, tg);
+    prev = baseline.ref;
+    momFallback = baseline.usedFallback;
   }
   if(!last) return;
   const pctVsTg=+(last.pct/tg*100).toFixed(1),vcls=pctVsTg>=100?'d':pctVsTg>=75?'w':'ok';
   const chg=prev?+(last.pct-prev.pct).toFixed(3):0;
+
+  // อัปเดต label ให้ตรงกับโหมดที่เลือก
+  const momSubEl = document.getElementById('mc-mom-sub');
+  const momThEl = document.getElementById('mc-mom-th-prev');
+  if (momMode === 'kpi') {
+    const lbl = momFallback ? 'เทียบเดือนก่อนหน้า (ไม่มีเดือนไหนผ่าน KPI ในช่วงข้อมูล)' : `เทียบเดือนล่าสุดที่ผ่าน KPI (${prev ? MONTH_TH[prev.ym]||prev.ym : '-'})`;
+    if (momSubEl) momSubEl.textContent = lbl;
+    if (momThEl) momThEl.textContent = momFallback ? 'ก่อนหน้า' : 'เดือนผ่าน KPI';
+  } else {
+    if (momSubEl) momSubEl.textContent = 'เทียบเดือนนี้ vs เดือนก่อนหน้า (ปฏิทิน)';
+    if (momThEl) momThEl.textContent = 'ก่อนหน้า';
+  }
 
   // === %Defect วันล่าสุดที่บันทึกของเครื่องนี้ ===
   // รวมทุก record ของเครื่องนี้ในวันล่าสุด (อาจมีหลาย shift/หลายสินค้า)
@@ -1412,7 +1465,7 @@ function buildMCCharts(){
 
   document.getElementById('mc-kpis').innerHTML=`
     <div class="kpi ${vcls}"><div class="kl">%Defect ล่าสุด (${MONTH_TH[last.ym]||last.ym})</div><div class="kv ${vcls}">${last.pct.toFixed(2)}%</div><div class="ks">Target: ${tg}% · ${pctVsTg}% ของ TG</div></div>
-    <div class="kpi"><div class="kl">เปลี่ยนแปลง vs เดือนก่อน</div><div class="kv ${chg>0?'d':chg<0?'ok':'n'}">${chg>0?'+':''}${chg.toFixed(2)}%</div><div class="ks">จาก ${prev?.pct.toFixed(2)||'-'}% (${MONTH_TH[prev?.ym]||''})</div></div>
+    <div class="kpi"><div class="kl">เปลี่ยนแปลง ${momMode==='kpi' && !momFallback ? 'vs เดือนผ่าน KPI' : 'vs เดือนก่อน'}</div><div class="kv ${chg>0?'d':chg<0?'ok':'n'}">${chg>0?'+':''}${chg.toFixed(2)}%</div><div class="ks">จาก ${prev?.pct.toFixed(2)||'-'}% (${MONTH_TH[prev?.ym]||''})</div></div>
     ${latestDayHTML}
     <div class="kpi b"><div class="kl">ปัญหาหลัก #1</div><div class="kv n">${pareto[0]?.type||'-'}</div><div class="ks">${pareto[0]?.ratio.toFixed(3)||0}% ratio</div></div>
     <div class="kpi b"><div class="kl">ปัญหาหลัก #2</div><div class="kv n">${pareto[1]?.type||'-'}</div><div class="ks">${pareto[1]?.ratio.toFixed(3)||0}% ratio</div></div>`;
@@ -2283,21 +2336,22 @@ function buildInsight(){
     return;
   }
   
-  // ----- Month-over-Month (เดือนที่เลือก vs เดือนก่อน) -----
+  // ----- Month-over-Month (เดือนที่เลือก vs เดือนอ้างอิงตาม momMode) -----
   const mcMonthly = MC_DATA[selMC] || [];
   let momBody = null;
   let momGoing = null;
-  let icLast = null, icPrev = null;
+  let icLast = null, icPrev = null, icLastIdx = -1, icMomFallback = false;
   if (selYm && mcMonthly.length > 0) {
-    const idx = mcMonthly.findIndex(m => m.ym === selYm);
-    if (idx >= 0) {
-      icLast = mcMonthly[idx];
-      icPrev = idx > 0 ? mcMonthly[idx - 1] : null;
-    }
+    icLastIdx = mcMonthly.findIndex(m => m.ym === selYm);
   }
-  if (!icLast && mcMonthly.length >= 1) {
-    icLast = mcMonthly.at(-1);
-    icPrev = mcMonthly.at(-2) || null;
+  if (icLastIdx < 0 && mcMonthly.length >= 1) {
+    icLastIdx = mcMonthly.length - 1;
+  }
+  if (icLastIdx >= 0) {
+    icLast = mcMonthly[icLastIdx];
+    const baseline = findMomBaseline(mcMonthly, icLastIdx, target);
+    icPrev = baseline.ref;
+    icMomFallback = baseline.usedFallback;
   }
   if (icLast && icPrev && icPrev.pct > 0) {
     const diff = icLast.pct - icPrev.pct;
@@ -2411,7 +2465,8 @@ function buildInsight(){
         const monTH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
         return `${monTH[parseInt(m)-1]}${String(y).slice(-2)}`;
       };
-      momTxt = `<br>เทียบ <span class="c-mute">${monthLbl(momBody.prevYm)}</span> (${momBody.prevPct.toFixed(2)}%) → <span class="c-mute">${monthLbl(momBody.lastYm)}</span> (${momBody.lastPct.toFixed(2)}%) <span class="${cls}">${arrow} ${Math.abs(momBody.changePct).toFixed(1)}%</span>`;
+      const baseLbl = momMode==='kpi' && !icMomFallback ? 'เทียบเดือนผ่าน KPI' : 'เทียบเดือนก่อนหน้า';
+      momTxt = `<br>${baseLbl} <span class="c-mute">${monthLbl(momBody.prevYm)}</span> (${momBody.prevPct.toFixed(2)}%) → <span class="c-mute">${monthLbl(momBody.lastYm)}</span> (${momBody.lastPct.toFixed(2)}%) <span class="${cls}">${arrow} ${Math.abs(momBody.changePct).toFixed(1)}%</span>`;
     }
     
     statusHtml = `<div class="ic-section ${sectionCls}">
@@ -2442,7 +2497,7 @@ function buildInsight(){
       `• <strong class="c-warn">${t.type}</strong> เพิ่มขึ้น <strong class="c-warn">+${t.changePct.toFixed(1)}%</strong> <span class="c-mute">(${t.prev.toFixed(2)}% → ${t.last.toFixed(2)}%)</span>`
     ).join('<br>');
     momWorseHtml = `<div class="ic-section warn">
-      <div class="ic-lbl">⚠️ แนวโน้มแย่ลง (เทียบเดือนก่อน)</div>
+      <div class="ic-lbl">⚠️ แนวโน้มแย่ลง ${momMode==='kpi' && !icMomFallback ? '(เทียบเดือนที่ผ่าน KPI)' : '(เทียบเดือนก่อนหน้า)'}</div>
       <div class="ic-body">
         ${items}
       </div>
@@ -2501,12 +2556,14 @@ function buildInsight(){
         <span class="ic-title">สรุป Insight — ${selMC}</span>
         <span class="ic-range">${ppRangeMonths} เดือนล่าสุด</span>
       </div>
+      <div id="insight-mom-mode-toggle" style="display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 12px"></div>
       ${statusHtml}
       ${topTypesHtml}
       ${momWorseHtml}
       ${badProductsHtml}
       ${recsHtml}
     </div>`;
+  renderMomModeToggle();
 }
 
 function buildProductPareto(){
@@ -2866,7 +2923,16 @@ async function doLogin(){
       },
       body: JSON.stringify({ p_pin: pw })
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = await res.json();
+        detail = body.message || body.hint || body.details || JSON.stringify(body);
+      } catch(e2) {
+        detail = await res.text().catch(() => '');
+      }
+      throw new Error('HTTP ' + res.status + (detail ? ' — ' + detail : ''));
+    }
     const rows = await res.json();
     const result = Array.isArray(rows) ? rows[0] : rows;
 
@@ -3088,7 +3154,7 @@ document.head.appendChild(style);
     <div class="login-err" id="loginErr">รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่</div>
     <input type="password" class="login-input" id="loginInput" placeholder="รหัสผ่าน" autofocus>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
-    <div class="login-footer">ASPT Production System · v24-secure</div>
+    <div class="login-footer">ASPT Production System · v25-kpimom</div>
   </div>
 </div>
 
